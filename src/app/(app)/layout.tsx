@@ -14,7 +14,7 @@ import { Logo } from '@/components/logo';
 const navItems = [
   { href: '/dashboard', label: 'Αρχική', icon: Icons.dashboard },
   { href: '/suppliers', label: 'Προμηθευτές', icon: Icons.suppliers },
-  { href: '/orders/new', label: 'Νέα Παραγγελία', icon: Icons.newOrder },
+  { href: '/orders/new', label: 'Παραγγελία', icon: Icons.plus },
   { href: '/inventory', label: 'Αποθήκη', icon: Icons.inventory },
   { href: '/orders/history', label: 'Ιστορικό', icon: Icons.history },
 ];
