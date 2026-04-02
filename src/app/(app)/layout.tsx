@@ -73,7 +73,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               key={label}
               href={href}
               className={cn(
-                'flex flex-col items-center justify-center gap-1 p-2 text-xs font-medium',
+                'flex flex-col items-center justify-center gap-1 p-2 text-[9px] font-medium',
                 pathname.startsWith(href) ? 'text-accent' : 'text-muted-foreground'
               )}
             >
