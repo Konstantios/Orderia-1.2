@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
+import { InventoryDatabase } from './database';
 
 
 const supplier = customers[0];
@@ -47,6 +48,7 @@ export default function InventoryPage() {
                     <TabsList>
                         <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
                         <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
+                        <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
                         <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
                         <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
                     </TabsList>
@@ -112,6 +114,9 @@ export default function InventoryPage() {
                 </TabsContent>
                 <TabsContent value="counting" className="mt-6">
                     <InventoryCounting products={inventoryProducts} customer={supplier} />
+                </TabsContent>
+                <TabsContent value="database" className="mt-6">
+                    <InventoryDatabase products={inventoryProducts} />
                 </TabsContent>
             </Tabs>
         </div>
