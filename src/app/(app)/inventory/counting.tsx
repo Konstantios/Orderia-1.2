@@ -25,18 +25,34 @@ declare global {
   }
 }
 
+// Replicating color logic from inventory/page.tsx as requested
+const getStockColor = (current: number, ideal: number) => {
+    if (ideal === 0) return 'bg-muted/30';
+    const ratio = current / ideal;
+    if (ratio > 5 / 6) {
+      return 'bg-green-400/20 text-green-700 dark:text-green-400';
+    }
+    if (ratio <= 1 / 3) {
+      return 'bg-destructive/20 text-destructive';
+    }
+    if (ratio <= 1 / 2) {
+      return 'bg-yellow-400/20 text-yellow-700 dark:text-yellow-400';
+    }
+    return 'bg-muted/30';
+};
+
 export function InventoryCounting({ products, customer }: { products: Product[]; customer: Customer }) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
-  
+  const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
+
   // Mock inventory data for display. In a real app, this would be managed state.
   const inventoryData = customer.products.map(cp => {
     const product = products.find(p => p.id === cp.productId)!;
     const idealStock = cp.idealStock;
     const currentStock = Math.floor(Math.random() * (idealStock + 5)); // Random stock for demo
-    const suggestion = Math.max(0, idealStock - currentStock);
-    return { product, idealStock, currentStock, suggestion };
+    return { product, idealStock, currentStock };
   });
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -45,24 +61,29 @@ export function InventoryCounting({ products, customer }: { products: Product[];
 
   const handleScanSuccess = useCallback((scannedCode: string) => {
     const product = products.find(p => p.code === scannedCode);
-    setIsScanning(false);
     if (product) {
       setScannedProduct(product);
-      toast({ title: "Επιτυχής Σάρωση!", description: `Σαρώθηκε: ${product.name}` });
+      setScannedItems(prev => ({
+        ...prev,
+        [product.id]: (prev[product.id] || 0) + 1,
+      }));
+      toast({ title: "Επιτυχής Σάρωση!", description: `Προστέθηκε: ${product.name}` });
 
       const element = document.getElementById(`counting-product-${product.id}`);
       element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      setTimeout(() => setScannedProduct(null), 3000);
+      setTimeout(() => setScannedProduct(null), 2000);
     } else {
       toast({ variant: "destructive", title: "Άγνωστος Κωδικός", description: `Το προϊόν με κωδικό ${scannedCode} δεν βρέθηκε.` });
     }
   }, [products, toast]);
 
   useEffect(() => {
+    if (!isScanning) return;
+
     let stream: MediaStream | null = null;
     let detectionInterval: ReturnType<typeof setInterval>;
-
+    
     const startScan = async () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast({ variant: 'destructive', title: 'Σφάλμα Κάμερας', description: 'Η κάμερα δεν υποστηρίζεται σε αυτόν τον περιηγητή.' });
@@ -84,20 +105,23 @@ export function InventoryCounting({ products, customer }: { products: Product[];
           }
 
           const barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
-
+          
+          let isDetecting = false;
           detectionInterval = setInterval(async () => {
-            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && !isDetecting) {
               try {
+                isDetecting = true;
                 const barcodes = await barcodeDetector.detect(videoRef.current);
                 if (barcodes.length > 0 && barcodes[0].rawValue) {
                   handleScanSuccess(barcodes[0].rawValue);
                 }
               } catch (e) {
-                console.error('Barcode detection error:', e);
-                clearInterval(detectionInterval);
+                // Barcode detection can fail on some frames, no need to log.
+              } finally {
+                  isDetecting = false;
               }
             }
-          }, 500);
+          }, 300);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
@@ -111,26 +135,20 @@ export function InventoryCounting({ products, customer }: { products: Product[];
       }
     };
 
-    const stopScan = () => {
+    startScan();
+
+    return () => {
+      if (detectionInterval) clearInterval(detectionInterval);
       if (videoRef.current && videoRef.current.srcObject) {
         const currentStream = videoRef.current.srcObject as MediaStream;
         currentStream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
       }
-      if (detectionInterval) {
-        clearInterval(detectionInterval);
-      }
-    };
-
-    if (isScanning) {
-      startScan();
-    }
-
-    return () => {
-      stopScan();
     };
   }, [isScanning, toast, handleScanSuccess]);
   
+  const totalScannedProducts = Object.keys(scannedItems).length;
+
   return (
     <div className="space-y-4">
       {isScanning && (
@@ -169,8 +187,8 @@ export function InventoryCounting({ products, customer }: { products: Product[];
       
       <div className="flex justify-between items-center py-2">
         <div>
-          <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Πυρήνας Αποθεμάτων</h4>
-          <p className="text-xs text-muted-foreground">Τηλεμετρία και αναπλήρωση σε πραγματικό χρόνο</p>
+          <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Αποτελεσματα Καταμετρησης</h4>
+          <p className="text-xs text-muted-foreground">Σύνολο σαρωμένων προϊόντων: {totalScannedProducts}</p>
         </div>
         <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
           <span className="relative flex h-2 w-2 mr-2">
@@ -182,29 +200,31 @@ export function InventoryCounting({ products, customer }: { products: Product[];
       </div>
 
       <div className="space-y-3">
-        {inventoryData.map(({ product, currentStock, idealStock, suggestion }) => (
+        {inventoryData.map(({ product, currentStock, idealStock }) => {
+          const scannedCount = scannedItems[product.id] || 0;
+          return (
           <Card key={product.id} id={`counting-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", scannedProduct?.id === product.id && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
-            <div className={cn("p-3", currentStock === 0 && "bg-destructive/10 rounded-lg")}>
-              {currentStock === 0 && <p className="text-xs font-bold uppercase text-destructive mb-1">Κρίσιμη Έλλειψη</p>}
+            <div className={cn("p-3")}>
+              {currentStock <= idealStock / 3 && idealStock > 0 && <p className="text-xs font-bold uppercase text-destructive mb-1">Κρίσιμη Έλλειψη</p>}
               <p className="text-xs text-muted-foreground">SKU: {product.code}</p>
               <h4 className="font-semibold">{product.name}</h4>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <div className={cn("rounded-lg p-2", currentStock === 0 ? 'bg-destructive/20 text-destructive' : 'bg-muted/30')}>
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">ΑΠΟΘΕΜΑ</p>
+                <div className="rounded-lg bg-accent/20 p-2">
+                  <p className="text-xs font-semibold uppercase text-accent/80">ΣΚΑΝΑΡΙΣΜΕΝΑ</p>
+                  <p className="text-2xl font-bold text-accent">{scannedCount}</p>
+                </div>
+                <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
+                  <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
                   <p className="text-2xl font-bold">{currentStock}</p>
                 </div>
                 <div className="rounded-lg bg-muted/30 p-2">
                   <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
                   <p className="text-2xl font-bold">{idealStock}</p>
                 </div>
-                <div className="rounded-lg bg-muted/30 p-2">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
-                  <p className="text-2xl font-bold text-accent">+{suggestion}</p>
-                </div>
               </div>
             </div>
           </Card>
-        ))}
+        )})}
       </div>
     </div>
   );
