@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,9 @@ export default function NewOrderPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuggestionModeActive, setIsSuggestionModeActive] = useState(false);
+  const [preSuggestionOrderItems, setPreSuggestionOrderItems] = useState<OrderItem[]>([]);
+  
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const router = useRouter();
@@ -59,11 +62,14 @@ export default function NewOrderPage() {
   // Save order items to localStorage when they change, skipping the initial mount.
   useEffect(() => {
     if (didMountOrderItems.current) {
-      localStorage.setItem('orderItems', JSON.stringify(orderItems));
+      // Don't save suggested items to localStorage to avoid confusion on page reload
+      if (!isSuggestionModeActive) {
+        localStorage.setItem('orderItems', JSON.stringify(orderItems));
+      }
     } else {
       didMountOrderItems.current = true;
     }
-  }, [orderItems]);
+  }, [orderItems, isSuggestionModeActive]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -73,6 +79,13 @@ export default function NewOrderPage() {
   }, [notes]);
 
   const handleQuantityChange = (productId: string, newQuantity: number) => {
+    if (isSuggestionModeActive) {
+      toast({
+        title: 'Η λειτουργία προτάσεων είναι ενεργή',
+        description: 'Απενεργοποιήστε τις προτάσεις για να αλλάξετε τις ποσότητες.',
+      });
+      return;
+    }
     const updatedQuantity = Math.max(0, newQuantity);
     setOrderItems(prevItems => {
       const existingItem = prevItems.find(item => item.productId === productId);
@@ -94,45 +107,60 @@ export default function NewOrderPage() {
   const getQuantity = (productId: string) => {
     return orderItems.find(item => item.productId === productId)?.quantity || 0;
   };
-
-  const handleGetSuggestions = () => {
-    setIsLoading(true);
-    // Short delay to show loading state
-    setTimeout(() => {
-      try {
-        const newOrderItems: OrderItem[] = customer.products
-          .map(cp => {
-            const inventory = customerInventory.find(i => i.productId === cp.productId);
-            const currentStock = inventory?.currentStock || 0;
-            const idealStock = cp.idealStock;
-            const suggestedQuantity = Math.max(0, idealStock - currentStock);
-            return { productId: cp.productId, quantity: suggestedQuantity };
-          })
-          .filter(item => item.quantity > 0);
-          
-        setOrderItems(newOrderItems);
-        
-        toast({
-          title: "Οι Προτάσεις Εφαρμόστηκαν",
-          description: "Συμπληρώσαμε την παραγγελία με βάση τα ιδανικά επίπεδα αποθέματός σας.",
-        });
-
-      } catch (error) {
-        console.error(error);
-        toast({
-          variant: "destructive",
-          title: "Σφάλμα",
-          description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
-  };
   
-  if (searchParams.get('suggested') && orderItems.length === 0 && !isLoading) {
-    handleGetSuggestions();
-  }
+  const toggleSuggestionMode = useCallback(() => {
+    if (isSuggestionModeActive) {
+      // Deactivating suggestions
+      setOrderItems(preSuggestionOrderItems);
+      setIsSuggestionModeActive(false);
+      toast({
+        title: "Οι προτάσεις απενεργοποιήθηκαν",
+        description: "Η παραγγελία σας επανήλθε στην προηγούμενη κατάστασή της.",
+      });
+    } else {
+      // Activating suggestions
+      setIsLoading(true);
+      setTimeout(() => {
+        try {
+          setPreSuggestionOrderItems([...orderItems]); // Save current order
+
+          const newOrderItems: OrderItem[] = customer.products
+            .map(cp => {
+              const inventory = customerInventory.find(i => i.productId === cp.productId);
+              const currentStock = inventory?.currentStock || 0;
+              const idealStock = cp.idealStock;
+              const suggestedQuantity = Math.max(0, idealStock - currentStock);
+              return { productId: cp.productId, quantity: suggestedQuantity };
+            })
+            .filter(item => item.quantity > 0);
+            
+          setOrderItems(newOrderItems);
+          setIsSuggestionModeActive(true);
+          
+          toast({
+            title: "Οι Προτάσεις Εφαρμόστηκαν",
+            description: "Συμπληρώσαμε την παραγγελία με βάση τα ιδανικά επίπεδα αποθέματός σας.",
+          });
+        } catch (error) {
+          console.error(error);
+          toast({
+            variant: "destructive",
+            title: "Σφάλμα",
+            description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }, 300);
+    }
+  }, [isSuggestionModeActive, orderItems, preSuggestionOrderItems, toast]);
+  
+  useEffect(() => {
+    const suggestedParam = searchParams.get('suggested');
+    if (suggestedParam === 'true' && !isSuggestionModeActive && !isLoading && orderItems.length === 0) {
+      toggleSuggestionMode();
+    }
+  }, [searchParams, isSuggestionModeActive, isLoading, orderItems.length, toggleSuggestionMode]);
 
   const handleSubmitOrder = () => {
     if (orderItems.length === 0) {
@@ -149,6 +177,7 @@ export default function NewOrderPage() {
     });
     setOrderItems([]);
     setNotes('');
+    setIsSuggestionModeActive(false);
     // Clear localStorage after submission
     localStorage.removeItem('orderNotes');
     localStorage.removeItem('orderItems');
@@ -159,7 +188,15 @@ export default function NewOrderPage() {
     <div className="container mx-auto max-w-4xl space-y-6">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-headline text-3xl font-bold">Νέα Παραγγελία</h1>
-        <Button onClick={handleGetSuggestions} disabled={isLoading} className="bg-primary hover:bg-primary/90">
+        <Button 
+          onClick={toggleSuggestionMode} 
+          disabled={isLoading} 
+          variant={isSuggestionModeActive ? 'default' : 'outline'}
+          className={cn({
+            "bg-primary hover:bg-primary/90 text-primary-foreground": isSuggestionModeActive,
+            "border-primary text-primary bg-transparent hover:bg-primary/10": !isSuggestionModeActive,
+          })}
+        >
           {isLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -180,7 +217,7 @@ export default function NewOrderPage() {
                 key={product.id}
                 className={cn(
                   'flex flex-col items-start gap-4 rounded-lg border p-4 transition-colors sm:flex-row sm:items-center',
-                  getQuantity(product.id) > 0 ? 'border-primary bg-primary/5' : ''
+                  getQuantity(product.id) > 0 && (isSuggestionModeActive ? 'border-primary' : 'border-primary bg-primary/5')
                 )}
               >
                 <div className="relative h-24 w-full flex-shrink-0 sm:h-20 sm:w-20">
@@ -203,6 +240,7 @@ export default function NewOrderPage() {
                     size="icon"
                     className="h-10 w-10 rounded-full"
                     onClick={() => handleQuantityChange(product.id, getQuantity(product.id) - 1)}
+                    disabled={isSuggestionModeActive}
                   >
                     <Minus className="h-5 w-5" />
                   </Button>
@@ -212,12 +250,14 @@ export default function NewOrderPage() {
                     value={getQuantity(product.id)}
                     onChange={e => handleQuantityChange(product.id, parseInt(e.target.value) || 0)}
                     min="0"
+                    readOnly={isSuggestionModeActive}
                   />
                   <Button
                     variant="outline"
                     size="icon"
                     className="h-10 w-10 rounded-full"
                     onClick={() => handleQuantityChange(product.id, getQuantity(product.id) + 1)}
+                    disabled={isSuggestionModeActive}
                   >
                     <Plus className="h-5 w-5" />
                   </Button>
