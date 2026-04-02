@@ -25,6 +25,9 @@ const getProductData = (productId: string) => {
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/50 border-transparent';
     const ratio = current / ideal;
+    if (ratio > 5 / 6) {
+      return 'bg-green-400/10 border-green-400/50 text-green-400';
+    }
     if (ratio <= 1 / 3) {
       return 'bg-destructive/20 border-destructive/50 text-destructive';
     }
