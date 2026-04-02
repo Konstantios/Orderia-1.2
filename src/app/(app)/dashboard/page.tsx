@@ -44,6 +44,7 @@ const menuItems = [
 export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
+      <h1 className="font-headline text-3xl font-bold">Καλώς ήρθες, Φούρνος "Η Γεύση"</h1>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {menuItems.map((item) => (
           <Link href={item.href} key={item.title}>

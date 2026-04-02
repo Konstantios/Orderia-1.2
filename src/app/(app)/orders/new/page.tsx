@@ -12,9 +12,12 @@ import type { OrderItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Minus, Plus, Lightbulb, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const customer = customers[0];
 const customerProducts = allProducts.filter(p => customer.products.some(cp => cp.productId === p.id));
+const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+
 
 export default function NewOrderPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -186,13 +189,22 @@ export default function NewOrderPage() {
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+      
+      <div className="flex items-center gap-4">
+        <Image src={supplierLogo.imageUrl} alt={customer.name} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
+        <div>
+          <p className="font-semibold">{customer.name}</p>
+          <p className="text-sm text-muted-foreground">{customerProducts.length} Ενεργά Προϊόντα</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-headline text-3xl font-bold">Νέα Παραγγελία</h1>
         <Button 
           onClick={toggleSuggestionMode} 
           disabled={isLoading} 
           variant={isSuggestionModeActive ? 'default' : 'outline'}
-          className={cn({
+          className={cn('sm:w-auto w-full', {
             "bg-primary hover:bg-primary/90 text-primary-foreground": isSuggestionModeActive,
             "border-primary text-primary bg-transparent hover:bg-primary/10": !isSuggestionModeActive,
           })}
@@ -217,7 +229,7 @@ export default function NewOrderPage() {
                 key={product.id}
                 className={cn(
                   'flex flex-wrap items-center justify-between gap-y-4 gap-x-2 rounded-lg border p-4 transition-colors',
-                  getQuantity(product.id) > 0 && (isSuggestionModeActive ? 'border-primary' : 'border-primary bg-primary/5')
+                  getQuantity(product.id) > 0 && (isSuggestionModeActive ? 'border-primary bg-primary/10' : 'border-primary bg-primary/5')
                 )}
               >
                 <div className="flex items-center gap-4">

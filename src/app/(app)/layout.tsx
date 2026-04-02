@@ -9,6 +9,7 @@ import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Bell } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { Logo } from '@/components/logo';
 
 const navItems = [
   { href: '/dashboard', label: 'Αρχική', icon: Icons.dashboard },
@@ -26,18 +27,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setIsClient(true);
   }, []);
 
-  const getPageTitle = () => {
-    const currentNav = navItems.find(item => pathname.startsWith(item.href));
-    if (pathname === '/dashboard') return 'Καλώς ήρθες, Φούρνος "Η Γεύση"';
-    return currentNav?.label || 'Orderia';
-  };
-
   return (
     <div className="flex min-h-screen w-full flex-col">
       <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
-        <h1 className="flex-1 font-headline text-xl font-semibold tracking-tight">
-          {getPageTitle()}
-        </h1>
+        <div className="flex flex-1 items-center gap-2">
+            <Logo className="h-8 w-8" />
+            <span className="font-headline text-xl font-semibold tracking-tight">
+              Orderia
+            </span>
+        </div>
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="h-5 w-5 text-primary" />
