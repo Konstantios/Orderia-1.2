@@ -17,10 +17,15 @@ export default function LoginPage() {
     router.push('/dashboard');
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = (e: React.MouseEvent) => {
     e.preventDefault();
     // Mock admin login logic
     router.push('/admin/dashboard');
+  };
+
+  const handleSkipForDemo = (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push('/orders/new');
   };
 
   return (
@@ -58,8 +63,11 @@ export default function LoginPage() {
             <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg h-12">
               Login
             </Button>
-            <Button variant="outline" onClick={handleAdminLogin} className="w-full">
+            <Button type="button" variant="outline" onClick={handleAdminLogin} className="w-full">
               Wholesaler Access
+            </Button>
+            <Button type="button" variant="link" onClick={handleSkipForDemo} className="w-full">
+              Skip for demo
             </Button>
           </CardFooter>
         </form>
