@@ -42,12 +42,14 @@ export default function InventoryPage() {
         <div className="space-y-6">
             <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
             <Tabs defaultValue="stock" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
-                    <TabsTrigger value="counting" disabled>Καταμέτρηση</TabsTrigger>
-                    <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
-                    <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
-                </TabsList>
+                <div className="flex justify-center">
+                    <TabsList>
+                        <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
+                        <TabsTrigger value="counting" disabled>Καταμέτρηση</TabsTrigger>
+                        <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
+                        <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
+                    </TabsList>
+                </div>
                 <TabsContent value="stock" className="mt-6">
                     <div className="space-y-4">
                         <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Προμηθευτες</h2>
