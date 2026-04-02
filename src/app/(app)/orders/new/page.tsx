@@ -25,6 +25,46 @@ export default function NewOrderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const didMountNotes = useRef(false);
+  const didMountOrderItems = useRef(false);
+
+  // Load from localStorage on initial client render
+  useEffect(() => {
+    const savedNotes = localStorage.getItem('orderNotes');
+    if (savedNotes) {
+      setNotes(savedNotes);
+    }
+    const savedOrderItems = localStorage.getItem('orderItems');
+    if (savedOrderItems) {
+      try {
+        const parsedItems = JSON.parse(savedOrderItems);
+        if (Array.isArray(parsedItems)) {
+          setOrderItems(parsedItems);
+        }
+      } catch (error) {
+        console.error("Failed to parse order items from localStorage", error);
+      }
+    }
+  }, []);
+
+  // Save notes to localStorage when they change, skipping the initial mount.
+  useEffect(() => {
+    if (didMountNotes.current) {
+      localStorage.setItem('orderNotes', notes);
+    } else {
+      didMountNotes.current = true;
+    }
+  }, [notes]);
+
+  // Save order items to localStorage when they change, skipping the initial mount.
+  useEffect(() => {
+    if (didMountOrderItems.current) {
+      localStorage.setItem('orderItems', JSON.stringify(orderItems));
+    } else {
+      didMountOrderItems.current = true;
+    }
+  }, [orderItems]);
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -109,6 +149,9 @@ export default function NewOrderPage() {
     });
     setOrderItems([]);
     setNotes('');
+    // Clear localStorage after submission
+    localStorage.removeItem('orderNotes');
+    localStorage.removeItem('orderItems');
     router.push('/dashboard');
   };
 
