@@ -188,7 +188,7 @@ export default function NewOrderPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl space-y-6">
+    <div className="space-y-6">
       
       <div className="flex items-center gap-4">
         <Image src={supplierLogo.imageUrl} alt={customer.name} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
