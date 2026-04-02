@@ -216,25 +216,28 @@ export default function NewOrderPage() {
               <div
                 key={product.id}
                 className={cn(
-                  'flex flex-col items-start gap-4 rounded-lg border p-4 transition-colors sm:flex-row sm:items-center',
+                  'flex flex-wrap items-center justify-between gap-y-4 gap-x-2 rounded-lg border p-4 transition-colors',
                   getQuantity(product.id) > 0 && (isSuggestionModeActive ? 'border-primary' : 'border-primary bg-primary/5')
                 )}
               >
-                <div className="relative h-24 w-full flex-shrink-0 sm:h-20 sm:w-20">
-                  <Image
-                    src={product.imageUrl}
-                    alt={product.name}
-                    width={100}
-                    height={100}
-                    data-ai-hint={product.imageHint}
-                    className="h-full w-full rounded-md object-cover"
-                  />
+                <div className="flex items-center gap-4">
+                  <div className="relative h-20 w-20 flex-shrink-0">
+                    <Image
+                      src={product.imageUrl}
+                      alt={product.name}
+                      width={100}
+                      height={100}
+                      data-ai-hint={product.imageHint}
+                      className="h-full w-full rounded-md object-cover"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{product.name}</p>
+                    <p className="text-sm text-muted-foreground">{product.code}</p>
+                  </div>
                 </div>
-                <div className="flex-grow">
-                  <p className="font-semibold">{product.name}</p>
-                  <p className="text-sm text-muted-foreground">{product.code}</p>
-                </div>
-                <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
+                
+                <div className="flex items-center justify-end gap-3 flex-grow sm:flex-grow-0">
                   <Button
                     variant="outline"
                     size="icon"
