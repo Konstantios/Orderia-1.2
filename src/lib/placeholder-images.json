@@ -3,8 +3,32 @@
     {
       "id": "croissant",
       "description": "Butter Croissant",
-      "imageUrl": "https://picsum.photos/seed/1012/400/300",
+      "imageUrl": "https://picsum.photos/seed/ORD-0082/400/300",
       "imageHint": "croissant pastry"
+    },
+    {
+      "id": "special-pizza",
+      "description": "Special Pizza",
+      "imageUrl": "https://picsum.photos/seed/ORD-0045/400/300",
+      "imageHint": "special pizza"
+    },
+    {
+      "id": "bougatsa-thess",
+      "description": "Bougatsa Thessaloniki",
+      "imageUrl": "https://picsum.photos/seed/ORD-0114/400/300",
+      "imageHint": "bougatsa pastry"
+    },
+    {
+      "id": "kourou-pie",
+      "description": "Kourou Cheese Pie",
+      "imageUrl": "https://picsum.photos/seed/ORD-0021/400/300",
+      "imageHint": "cheese pie"
+    },
+    {
+      "id": "frozen-foods-logo",
+      "description": "Frozen Foods Logo",
+      "imageUrl": "https://picsum.photos/seed/ff-logo/100/100",
+      "imageHint": "frozen vegetables"
     },
     {
       "id": "piroski",

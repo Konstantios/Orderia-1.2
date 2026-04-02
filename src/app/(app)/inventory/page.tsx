@@ -1,116 +1,110 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { customerInventory as initialInventory, products, customers } from '@/lib/data';
-import type { CustomerInventoryItem } from '@/lib/types';
-import { useToast } from '@/hooks/use-toast';
-import { ScanLine } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { products as allProducts, customerInventory as initialInventory, customers } from '@/lib/data';
+import { cn } from '@/lib/utils';
+import { Star } from 'lucide-react';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const customer = customers[0];
-const customerProducts = products.filter(p => customer.products.some(cp => cp.productId === p.id));
 
-export default function InventoryPage() {
-  const [inventory, setInventory] = useState<CustomerInventoryItem[]>(initialInventory);
-  const { toast } = useToast();
-  const router = useRouter();
+const supplier = customers[0];
+const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
 
-  const handleStockChange = (productId: string, newStock: number) => {
-    const updatedStock = Math.max(0, newStock);
-    setInventory(prev => {
-      const existing = prev.find(item => item.productId === productId);
-      if (existing) {
-        return prev.map(item =>
-          item.productId === productId ? { ...item, currentStock: updatedStock } : item
-        );
-      }
-      return [...prev, { productId, currentStock: updatedStock }];
-    });
-  };
-
-  const getProductData = (productId: string) => {
-    const product = customerProducts.find(p => p.id === productId)!;
-    const idealStock = customer.products.find(cp => cp.productId === productId)?.idealStock || 0;
-    const currentStock = inventory.find(i => i.productId === productId)?.currentStock || 0;
+const getProductData = (productId: string) => {
+    const product = inventoryProducts.find(p => p.id === productId)!;
+    const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
+    const currentStock = initialInventory.find(i => i.productId === productId)?.currentStock || 0;
     const suggestion = Math.max(0, idealStock - currentStock);
     return { product, idealStock, currentStock, suggestion };
-  };
+};
 
-  const handleScan = (productId: string) => {
-    handleStockChange(productId, getProductData(productId).currentStock + 1);
-    toast({
-      title: `Σαρώθηκε: ${getProductData(productId).product.name}`,
-      description: `Το απόθεμα είναι τώρα ${getProductData(productId).currentStock + 1}.`,
-    });
-  };
+const getStockColor = (current: number, ideal: number) => {
+    if (ideal === 0) return 'bg-muted/50 border-transparent';
+    const ratio = current / ideal;
+    if (ratio <= 1 / 3) {
+      return 'bg-destructive/20 border-destructive/50 text-destructive';
+    }
+    if (ratio <= 1 / 2) {
+      return 'bg-yellow-400/10 border-yellow-400/50 text-yellow-400';
+    }
+    return 'bg-muted/50 border-transparent';
+};
 
-  const handleSaveInventory = () => {
-    // Here you would save the inventory to your backend
-    toast({
-      title: 'Η Απογραφή Αποθηκεύτηκε',
-      description: 'Τα επίπεδα αποθέματός σας έχουν ενημερωθεί.',
-    });
-  };
-  
-  const handleCreateOrder = () => {
-    router.push('/orders/new?suggested=true');
-  }
-
-  return (
-    <div className="container mx-auto max-w-4xl space-y-6">
-      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-headline text-3xl font-bold">Απογραφή Αποθήκης</h1>
-          <p className="text-muted-foreground">Ενημερώστε το απόθεμά σας για να λάβετε έξυπνες προτάσεις παραγγελιών.</p>
+export default function InventoryPage() {
+    return (
+        <div className="space-y-6">
+            <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
+            <Tabs defaultValue="stock" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
+                    <TabsTrigger value="counting" disabled>Καταμέτρηση</TabsTrigger>
+                    <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
+                    <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
+                </TabsList>
+                <TabsContent value="stock" className="mt-6">
+                    <div className="space-y-4">
+                        <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Προμηθευτες</h2>
+                        <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
+                            <AccordionItem value="item-1" className="border-none">
+                                <Card className="rounded-lg">
+                                  <AccordionTrigger className="flex w-full items-center justify-between p-3 hover:no-underline">
+                                      <div className="flex items-center gap-4 text-left">
+                                          <Image src={supplierLogo.imageUrl} alt={supplier.name} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
+                                          <div>
+                                              <div className="flex items-center gap-2">
+                                                  <p className="font-semibold">{supplier.name}</p>
+                                                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                                              </div>
+                                              <p className="text-sm text-muted-foreground">{supplier.products.length} Ενεργά Προϊόντα</p>
+                                          </div>
+                                      </div>
+                                  </AccordionTrigger>
+                                </Card>
+                                <AccordionContent className="p-0">
+                                    <div className="space-y-4 pt-4">
+                                        <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Λιστα προϊοντων</h2>
+                                        {inventoryProducts.map(({ id }) => {
+                                            const { product, idealStock, currentStock, suggestion } = getProductData(id);
+                                            if (!product) return null;
+                                            return (
+                                                <Card key={id} className="overflow-hidden bg-card">
+                                                    <CardContent className="p-4">
+                                                        <div className="flex items-center gap-4">
+                                                            <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg object-cover" data-ai-hint={product.imageHint} />
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold">{product.name}</p>
+                                                                <p className="text-sm text-muted-foreground">{product.code}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                                                            <div className={cn('rounded-lg border p-2', getStockColor(currentStock, idealStock))}>
+                                                                <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
+                                                                <p className="text-2xl font-bold">{currentStock}</p>
+                                                            </div>
+                                                            <div className="rounded-lg bg-muted/30 p-2">
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
+                                                                <p className="text-2xl font-bold">{idealStock}</p>
+                                                            </div>
+                                                            <div className="rounded-lg bg-muted/30 p-2">
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
+                                                                <p className="text-2xl font-bold text-accent">+{suggestion}</p>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                    </div>
+                </TabsContent>
+            </Tabs>
         </div>
-        <div className="flex gap-2">
-            <Button onClick={handleSaveInventory} variant="outline">Αποθήκευση Απογραφής</Button>
-            <Button onClick={handleCreateOrder}>Δημιουργία Παραγγελίας από Προτάσεις</Button>
-        </div>
-      </div>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Προϊόν</TableHead>
-                <TableHead className="text-center">Τρέχον Απόθεμα</TableHead>
-                <TableHead className="text-center">Ιδανικό Απόθεμα</TableHead>
-                <TableHead className="text-center text-primary font-semibold">Πρόταση</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customerProducts.map(p => {
-                const { product, idealStock, currentStock, suggestion } = getProductData(p.id);
-                return (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell className="text-center w-48">
-                      <div className="flex items-center justify-center gap-2">
-                        <Input
-                          type="number"
-                          value={currentStock}
-                          onChange={(e) => handleStockChange(product.id, parseInt(e.target.value) || 0)}
-                          className="w-20 text-center"
-                        />
-                        <Button variant="ghost" size="icon" onClick={() => handleScan(product.id)}>
-                          <ScanLine className="h-5 w-5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center font-medium">{idealStock}</TableCell>
-                    <TableCell className="text-center font-bold text-primary text-lg">{suggestion}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
+    );
 }

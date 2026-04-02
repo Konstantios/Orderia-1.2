@@ -6,11 +6,13 @@ function getImage(id: string) {
   return image ? { url: image.imageUrl, hint: image.imageHint } : { url: 'https://picsum.photos/seed/placeholder/400/300', hint: 'food product' };
 }
 
+// Updated products to match the screenshot
 export const products: Product[] = [
-  { id: 'p1', code: '1012', name: 'Κρουασάν Βουτύρου', imageUrl: getImage('croissant').url, imageHint: getImage('croissant').hint },
-  { id: 'p2', code: '1018', name: 'Πιροσκί Τυριού', imageUrl: getImage('piroski').url, imageHint: getImage('piroski').hint },
-  { id: 'p3', code: '1020', name: 'Ζύμη Πίτσας', imageUrl: getImage('pizza-dough').url, imageHint: getImage('pizza-dough').hint },
-  { id: 'p4', code: '1022', name: 'Μπουγάτσα Κρέμα', imageUrl: getImage('bougatsa').url, imageHint: getImage('bougatsa').hint },
+  { id: 'p1', code: 'ORD-0045', name: 'Κατεψυγμένη Πίτσα Special 8-τεμ', imageUrl: getImage('special-pizza').url, imageHint: getImage('special-pizza').hint },
+  { id: 'p2', code: 'ORD-0082', name: 'Κρουασάν Βουτύρου (Κούτα)', imageUrl: getImage('croissant').url, imageHint: getImage('croissant').hint },
+  { id: 'p3', code: 'ORD-0114', name: 'Μπουγάτσα Θεσσαλονίκης', imageUrl: getImage('bougatsa-thess').url, imageHint: getImage('bougatsa-thess').hint },
+  { id: 'p4', code: 'ORD-0021', name: 'Τυροπιτάκια Κουρού (Συσκ.)', imageUrl: getImage('kourou-pie').url, imageHint: getImage('kourou-pie').hint },
+  // Keep some old ones for other parts of the app to not break
   { id: 'p5', code: '1030', name: 'Σπανακόπιτα', imageUrl: getImage('spinach-pie').url, imageHint: getImage('spinach-pie').hint },
   { id: 'p6', code: '1035', name: 'Λουκανικοπιτάκι', imageUrl: getImage('sausage-roll').url, imageHint: getImage('sausage-roll').hint },
 ];
@@ -18,12 +20,14 @@ export const products: Product[] = [
 export const customers: Customer[] = [
   {
     id: 'c1',
-    name: 'Φούρνος "Η Γεύση"',
+    name: 'Frozen Foods', // Renamed to match supplier in screenshot
     email: 'demo@bakery.com',
     products: [
-      { productId: 'p1', idealStock: 10 },
-      { productId: 'p2', idealStock: 8 },
-      { productId: 'p5', idealStock: 12 },
+      { productId: 'p1', idealStock: 30 }, // Pizza
+      { productId: 'p2', idealStock: 25 }, // Croissant
+      { productId: 'p3', idealStock: 40 }, // Bougatsa
+      { productId: 'p4', idealStock: 20 }, // Kourou
+      { productId: 'p5', idealStock: 12 }, // Spanakopita, keep for other pages
     ],
   },
   {
@@ -31,8 +35,6 @@ export const customers: Customer[] = [
     name: 'Snack Bar "Το Γρήγορο"',
     email: 'contact@snackbar.gr',
     products: [
-      { productId: 'p2', idealStock: 15 },
-      { productId: 'p3', idealStock: 5 },
       { productId: 'p6', idealStock: 20 },
     ],
   },
@@ -41,36 +43,38 @@ export const customers: Customer[] = [
     name: 'Ζαχαροπλαστείο "Ο Γλυκός Πειρασμός"',
     email: 'orders@glykos.gr',
     products: [
-      { productId: 'p1', idealStock: 20 },
-      { productId: 'p4', idealStock: 15 },
+      { productId: 'p2', idealStock: 20 },
     ],
   },
 ];
 
+// Updated inventory to match the screenshot
 export const customerInventory: CustomerInventoryItem[] = [
-  { productId: 'p1', currentStock: 3 },
-  { productId: 'p2', currentStock: 1 },
-  { productId: 'p5', currentStock: 5 },
+  { productId: 'p1', currentStock: 5 },   // Pizza
+  { productId: 'p2', currentStock: 12 },  // Croissant
+  { productId: 'p3', currentStock: 38 },  // Bougatsa
+  { productId: 'p4', currentStock: 18 },  // Kourou
+  { productId: 'p5', currentStock: 5 },   // Spanakopita, keep for other pages
 ];
 
 export const orderHistory: Order[] = [
   {
     id: 'o1',
     date: '2023-10-18T10:00:00Z',
-    items: [{ productId: 'p1', quantity: 7 }, { productId: 'p2', quantity: 7 }, { productId: 'p5', quantity: 8 }],
+    items: [{ productId: 'p2', quantity: 7 }, { productId: 'p5', quantity: 8 }],
     status: 'Ολοκληρωμένη',
     notes: 'Παράδοση πριν τις 08:00',
   },
   {
     id: 'o2',
     date: '2023-10-11T10:00:00Z',
-    items: [{ productId: 'p1', quantity: 8 }, { productId: 'p2', quantity: 5 }],
+    items: [{ productId: 'p2', quantity: 5 }],
     status: 'Ολοκληρωμένη',
   },
   {
     id: 'o3',
     date: '2023-10-04T10:00:00Z',
-    items: [{ productId: 'p1', quantity: 5 }, { productId: 'p2', quantity: 8 }, { productId: 'p5', quantity: 6 }],
+    items: [{ productId: 'p2', quantity: 8 }, { productId: 'p5', quantity: 6 }],
     status: 'Ολοκληρωμένη',
   },
 ];
