@@ -10,8 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { products as allProducts, customerInventory, customers } from '@/lib/data';
 import type { OrderItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Sparkles, Loader2 } from 'lucide-react';
-import { intelligentOrderSuggestions } from '@/ai/flows/intelligent-order-suggestions';
+import { Minus, Plus, Lightbulb, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 const customer = customers[0];
@@ -48,48 +47,39 @@ export default function NewOrderPage() {
     return orderItems.find(item => item.productId === productId)?.quantity || 0;
   };
 
-  const handleGetSuggestions = async () => {
+  const handleGetSuggestions = () => {
     setIsLoading(true);
-    try {
-      const suggestionsInput = {
-        customerId: customer.id,
-        customerName: customer.name,
-        products: customer.products.map(cp => {
-          const product = allProducts.find(p => p.id === cp.productId)!;
-          const inventory = customerInventory.find(i => i.productId === cp.productId);
-          return {
-            productId: product.id,
-            productName: product.name,
-            currentStock: inventory?.currentStock || 0,
-            idealStock: cp.idealStock,
-            historicalOrders: [],
-          };
-        }),
-      };
-      
-      const result = await intelligentOrderSuggestions(suggestionsInput);
-      
-      const newOrderItems: OrderItem[] = result.suggestions
-        .filter(s => s.suggestedQuantity > 0)
-        .map(s => ({ productId: s.productId, quantity: s.suggestedQuantity }));
+    // Short delay to show loading state
+    setTimeout(() => {
+      try {
+        const newOrderItems: OrderItem[] = customer.products
+          .map(cp => {
+            const inventory = customerInventory.find(i => i.productId === cp.productId);
+            const currentStock = inventory?.currentStock || 0;
+            const idealStock = cp.idealStock;
+            const suggestedQuantity = Math.max(0, idealStock - currentStock);
+            return { productId: cp.productId, quantity: suggestedQuantity };
+          })
+          .filter(item => item.quantity > 0);
+          
+        setOrderItems(newOrderItems);
         
-      setOrderItems(newOrderItems);
-      
-      toast({
-        title: "AI Suggestions Applied",
-        description: "We've filled out the order based on your stock and sales history.",
-      });
+        toast({
+          title: "Suggestions Applied",
+          description: "We've filled out the order based on your ideal stock levels.",
+        });
 
-    } catch (error) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not generate AI suggestions.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+      } catch (error) {
+        console.error(error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Could not generate suggestions.",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
   };
   
   if (searchParams.get('suggested') && orderItems.length === 0 && !isLoading) {
@@ -122,7 +112,7 @@ export default function NewOrderPage() {
           {isLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
-            <Sparkles className="mr-2 h-4 w-4" />
+            <Lightbulb className="mr-2 h-4 w-4" />
           )}
           Smart Suggested Order
         </Button>
