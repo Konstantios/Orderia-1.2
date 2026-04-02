@@ -21,11 +21,11 @@ import { Bell, LogOut, Settings, PanelLeft } from 'lucide-react';
 import { Logo } from '@/components/logo';
 
 const navItems = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: Icons.dashboard },
-  { href: '/admin/orders', label: 'Orders', icon: Icons.newOrder },
-  { href: '/admin/customers', label: 'Customers', icon: Icons.customers },
-  { href: '/admin/warehouse', label: 'Warehouse', icon: Icons.warehouse },
-  { href: '/admin/reports', label: 'Reports', icon: Icons.reports },
+  { href: '/admin/dashboard', label: 'Πίνακας Ελέγχου', icon: Icons.dashboard },
+  { href: '/admin/orders', label: 'Παραγγελίες', icon: Icons.newOrder },
+  { href: '/admin/customers', label: 'Πελάτες', icon: Icons.customers },
+  { href: '/admin/warehouse', label: 'Αποθήκη', icon: Icons.warehouse },
+  { href: '/admin/reports', label: 'Αναφορές', icon: Icons.reports },
 ];
 
 function AdminHeader() {
@@ -34,10 +34,10 @@ function AdminHeader() {
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <Button size="icon" variant="outline" className="sm:hidden" onClick={toggleSidebar}>
             <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Toggle Menu</span>
+            <span className="sr-only">Εναλλαγή Μενού</span>
           </Button>
           <div className="flex-1">
-             <h1 className="font-headline text-2xl font-semibold">Wholesaler Dashboard</h1>
+             <h1 className="font-headline text-2xl font-semibold">Πίνακας Ελέγχου Χονδρέμπορου</h1>
           </div>
           <div className="flex items-center gap-2">
             <Button size="icon" variant="ghost" className="rounded-full">
@@ -84,14 +84,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <SidebarMenuItem>
                         <SidebarMenuButton>
                             <Settings />
-                            <span>Settings</span>
+                            <span>Ρυθμίσεις</span>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <Link href="/">
                             <SidebarMenuButton>
                                 <LogOut />
-                                <span>Logout</span>
+                                <span>Αποσύνδεση</span>
                             </SidebarMenuButton>
                         </Link>
                     </SidebarMenuItem>

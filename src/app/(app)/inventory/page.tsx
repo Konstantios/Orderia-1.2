@@ -43,16 +43,16 @@ export default function InventoryPage() {
   const handleScan = (productId: string) => {
     handleStockChange(productId, getProductData(productId).currentStock + 1);
     toast({
-      title: `Scanned: ${getProductData(productId).product.name}`,
-      description: `Stock is now ${getProductData(productId).currentStock + 1}.`,
+      title: `Σαρώθηκε: ${getProductData(productId).product.name}`,
+      description: `Το απόθεμα είναι τώρα ${getProductData(productId).currentStock + 1}.`,
     });
   };
 
   const handleSaveInventory = () => {
     // Here you would save the inventory to your backend
     toast({
-      title: 'Inventory Saved',
-      description: 'Your stock levels have been updated.',
+      title: 'Η Απογραφή Αποθηκεύτηκε',
+      description: 'Τα επίπεδα αποθέματός σας έχουν ενημερωθεί.',
     });
   };
   
@@ -64,12 +64,12 @@ export default function InventoryPage() {
     <div className="container mx-auto max-w-4xl space-y-6">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-headline text-3xl font-bold">Warehouse Inventory</h1>
-          <p className="text-muted-foreground">Update your stock to get smart order suggestions.</p>
+          <h1 className="font-headline text-3xl font-bold">Απογραφή Αποθήκης</h1>
+          <p className="text-muted-foreground">Ενημερώστε το απόθεμά σας για να λάβετε έξυπνες προτάσεις παραγγελιών.</p>
         </div>
         <div className="flex gap-2">
-            <Button onClick={handleSaveInventory} variant="outline">Save Inventory</Button>
-            <Button onClick={handleCreateOrder}>Create Order from Suggestions</Button>
+            <Button onClick={handleSaveInventory} variant="outline">Αποθήκευση Απογραφής</Button>
+            <Button onClick={handleCreateOrder}>Δημιουργία Παραγγελίας από Προτάσεις</Button>
         </div>
       </div>
       <Card>
@@ -77,10 +77,10 @@ export default function InventoryPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-center">Current Stock</TableHead>
-                <TableHead className="text-center">Ideal Stock</TableHead>
-                <TableHead className="text-center text-primary font-semibold">Suggestion</TableHead>
+                <TableHead>Προϊόν</TableHead>
+                <TableHead className="text-center">Τρέχον Απόθεμα</TableHead>
+                <TableHead className="text-center">Ιδανικό Απόθεμα</TableHead>
+                <TableHead className="text-center text-primary font-semibold">Πρόταση</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

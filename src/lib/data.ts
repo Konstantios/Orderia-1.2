@@ -58,20 +58,20 @@ export const orderHistory: Order[] = [
     id: 'o1',
     date: '2023-10-18T10:00:00Z',
     items: [{ productId: 'p1', quantity: 7 }, { productId: 'p2', quantity: 7 }, { productId: 'p5', quantity: 8 }],
-    status: 'Completed',
+    status: 'Ολοκληρωμένη',
     notes: 'Παράδοση πριν τις 08:00',
   },
   {
     id: 'o2',
     date: '2023-10-11T10:00:00Z',
     items: [{ productId: 'p1', quantity: 8 }, { productId: 'p2', quantity: 5 }],
-    status: 'Completed',
+    status: 'Ολοκληρωμένη',
   },
   {
     id: 'o3',
     date: '2023-10-04T10:00:00Z',
     items: [{ productId: 'p1', quantity: 5 }, { productId: 'p2', quantity: 8 }, { productId: 'p5', quantity: 6 }],
-    status: 'Completed',
+    status: 'Ολοκληρωμένη',
   },
 ];
 
@@ -92,7 +92,7 @@ export const adminDashboardData: AdminDashboardData = {
 };
 
 export const notifications: Notification[] = [
-  { id: 'n1', title: 'Reminder: Weekly Order', description: 'Please place your weekly order by 5 PM today.', date: new Date().toISOString(), read: false },
-  { id: 'n2', title: 'Order #O2 Confirmed', description: 'Your order has been confirmed and will be delivered tomorrow.', date: '2023-10-11T11:00:00Z', read: true },
-  { id: 'n3', title: 'New Product Available', description: 'Check out the new Sausage Rolls in our product list!', date: '2023-10-09T09:00:00Z', read: true },
+  { id: 'n1', title: 'Υπενθύμιση: Εβδομαδιαία Παραγγελία', description: 'Παρακαλούμε υποβάλετε την εβδομαδιαία παραγγελία σας μέχρι τις 5 μ.μ. σήμερα.', date: new Date().toISOString(), read: false },
+  { id: 'n2', title: 'Η Παραγγελία #O2 Επιβεβαιώθηκε', description: 'Η παραγγελία σας έχει επιβεβαιωθεί και θα παραδοθεί αύριο.', date: '2023-10-11T11:00:00Z', read: true },
+  { id: 'n3', title: 'Νέο Προϊόν Διαθέσιμο', description: 'Δείτε τα νέα Λουκανικοπιτάκια στη λίστα προϊόντων μας!', date: '2023-10-09T09:00:00Z', read: true },
 ];

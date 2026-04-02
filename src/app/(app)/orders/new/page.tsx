@@ -65,16 +65,16 @@ export default function NewOrderPage() {
         setOrderItems(newOrderItems);
         
         toast({
-          title: "Suggestions Applied",
-          description: "We've filled out the order based on your ideal stock levels.",
+          title: "Οι Προτάσεις Εφαρμόστηκαν",
+          description: "Συμπληρώσαμε την παραγγελία με βάση τα ιδανικά επίπεδα αποθέματός σας.",
         });
 
       } catch (error) {
         console.error(error);
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "Could not generate suggestions.",
+          title: "Σφάλμα",
+          description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
         });
       } finally {
         setIsLoading(false);
@@ -90,14 +90,14 @@ export default function NewOrderPage() {
     if (orderItems.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'Empty Order',
-        description: 'Please add items to your order before submitting.',
+        title: 'Κενή Παραγγελία',
+        description: 'Παρακαλώ προσθέστε προϊόντα στην παραγγελία σας πριν την υποβολή.',
       });
       return;
     }
     toast({
-      title: 'Order Placed!',
-      description: 'Your order has been successfully submitted.',
+      title: 'Η Παραγγελία Υποβλήθηκε!',
+      description: 'Η παραγγελία σας υποβλήθηκε με επιτυχία.',
     });
     setOrderItems([]);
     setNotes('');
@@ -107,20 +107,20 @@ export default function NewOrderPage() {
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="font-headline text-3xl font-bold">New Order</h1>
+        <h1 className="font-headline text-3xl font-bold">Νέα Παραγγελία</h1>
         <Button onClick={handleGetSuggestions} disabled={isLoading} className="bg-primary hover:bg-primary/90">
           {isLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Lightbulb className="mr-2 h-4 w-4" />
           )}
-          Smart Suggested Order
+          Έξυπνη Προτεινόμενη Παραγγελία
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Products</CardTitle>
+          <CardTitle>Προϊόντα</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -179,11 +179,11 @@ export default function NewOrderPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Notes</CardTitle>
+          <CardTitle>Σημειώσεις</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
-            placeholder="e.g. deliver before 08:00..."
+            placeholder="π.χ. παράδοση πριν τις 08:00..."
             value={notes}
             onChange={e => setNotes(e.target.value)}
           />
@@ -192,7 +192,7 @@ export default function NewOrderPage() {
       
       <div className="flex justify-end">
         <Button onClick={handleSubmitOrder} size="lg" className="h-14 bg-accent text-accent-foreground text-xl font-bold hover:bg-accent/90">
-          Submit Order
+          Υποβολή Παραγγελίας
         </Button>
       </div>
     </div>

@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="h-5 w-5 text-primary" />
-            <span className="sr-only">Toggle notifications</span>
+            <span className="sr-only">Εναλλαγή ειδοποιήσεων</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -47,12 +47,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Ο Λογαριασμός μου</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem>Ρυθμίσεις</DropdownMenuItem>
+              <DropdownMenuItem>Υποστήριξη</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><Link href="/">Logout</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/">Αποσύνδεση</Link></DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

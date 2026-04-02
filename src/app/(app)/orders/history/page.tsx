@@ -15,8 +15,8 @@ export default function OrderHistoryPage() {
 
   const handleReorder = (orderId: string) => {
     toast({
-      title: `Reordering Order #${orderId}`,
-      description: 'The items have been added to your new order.',
+      title: `Επανάληψη Παραγγελίας #${orderId}`,
+      description: 'Τα προϊόντα προστέθηκαν στη νέα σας παραγγελία.',
     });
     // In a real app, this would populate the new order page with items from the selected order
     router.push('/orders/new');
@@ -24,16 +24,16 @@ export default function OrderHistoryPage() {
   
   return (
     <div className="container mx-auto max-w-4xl space-y-6">
-       <h1 className="font-headline text-3xl font-bold">Order History</h1>
+       <h1 className="font-headline text-3xl font-bold">Ιστορικό Παραγγελιών</h1>
       <div className="space-y-6">
         {orderHistory.map(order => (
           <Card key={order.id} className="overflow-hidden">
             <CardHeader className="flex-row items-center justify-between bg-muted/30">
               <div>
-                <CardTitle className="text-lg">Order #{order.id}</CardTitle>
+                <CardTitle className="text-lg">Παραγγελία #{order.id}</CardTitle>
                 <CardDescription>{new Date(order.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</CardDescription>
               </div>
-              <Badge variant={order.status === 'Completed' ? 'secondary' : 'default'}>{order.status}</Badge>
+              <Badge variant={order.status === 'Ολοκληρωμένη' ? 'secondary' : 'default'}>{order.status}</Badge>
             </CardHeader>
             <CardContent className="p-6">
               <ul className="space-y-3">
@@ -51,7 +51,7 @@ export default function OrderHistoryPage() {
                 <>
                   <Separator className="my-4" />
                   <p className="text-sm text-muted-foreground">
-                    <strong>Notes:</strong> {order.notes}
+                    <strong>Σημειώσεις:</strong> {order.notes}
                   </p>
                 </>
               )}
@@ -59,7 +59,7 @@ export default function OrderHistoryPage() {
             <CardFooter className="bg-muted/30 justify-end">
               <Button onClick={() => handleReorder(order.id)}>
                 <History className="mr-2 h-4 w-4" />
-                Repeat Order
+                Επανάληψη Παραγγελίας
               </Button>
             </CardFooter>
           </Card>

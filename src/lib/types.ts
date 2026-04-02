@@ -32,7 +32,7 @@ export interface Order {
   id: string;
   date: string;
   items: OrderItem[];
-  status: 'Pending' | 'Completed' | 'Shipped';
+  status: 'Εκκρεμής' | 'Ολοκληρωμένη' | 'Απεσταλμένη';
   notes?: string;
 }
 

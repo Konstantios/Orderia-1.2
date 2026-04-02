@@ -12,16 +12,16 @@ import {
 import { Badge } from "@/components/ui/badge"
 
 const kpis = [
-  { title: "Today's Orders", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
-  { title: "Pending Orders", value: adminDashboardData.pendingOrders, icon: Icons.history },
-  { title: "Low Stock Items", value: adminDashboardData.lowStockItems, icon: Icons.warehouse },
-  { title: "New Customers", value: adminDashboardData.newCustomers, icon: Icons.customers },
+  { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
+  { title: "Εκκρεμείς Παραγγελίες", value: adminDashboardData.pendingOrders, icon: Icons.history },
+  { title: "Προϊόντα σε Έλλειψη", value: adminDashboardData.lowStockItems, icon: Icons.warehouse },
+  { title: "Νέοι Πελάτες", value: adminDashboardData.newCustomers, icon: Icons.customers },
 ]
 
 const recentOrders = [
-    { id: 'ORD-001', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-24', status: 'Pending', total: '€125.50' },
-    { id: 'ORD-002', customer: 'Snack Bar "Το Γρήγορο"', date: '2023-10-24', status: 'Shipped', total: '€88.00' },
-    { id: 'ORD-003', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-23', status: 'Completed', total: '€110.20' },
+    { id: 'ORD-001', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-24', status: 'Εκκρεμής', total: '€125.50' },
+    { id: 'ORD-002', customer: 'Snack Bar "Το Γρήγορο"', date: '2023-10-24', status: 'Απεσταλμένη', total: '€88.00' },
+    { id: 'ORD-003', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-23', status: 'Ολοκληρωμένη', total: '€110.20' },
 ]
 
 export default function AdminDashboardPage() {
@@ -43,17 +43,17 @@ export default function AdminDashboardPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>Recent Orders</CardTitle>
+          <CardTitle>Πρόσφατες Παραγγελίες</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order ID</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Κωδ. Παραγγελίας</TableHead>
+                <TableHead>Πελάτης</TableHead>
+                <TableHead>Ημερομηνία</TableHead>
+                <TableHead>Κατάσταση</TableHead>
+                <TableHead className="text-right">Σύνολο</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -62,7 +62,7 @@ export default function AdminDashboardPage() {
                   <TableCell className="font-medium">{order.id}</TableCell>
                   <TableCell>{order.customer}</TableCell>
                   <TableCell>{order.date}</TableCell>
-                  <TableCell><Badge variant={order.status === 'Pending' ? 'destructive' : order.status === 'Shipped' ? 'default' : 'secondary'}>{order.status}</Badge></TableCell>
+                  <TableCell><Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'}>{order.status}</Badge></TableCell>
                   <TableCell className="text-right">{order.total}</TableCell>
                 </TableRow>
               ))}
