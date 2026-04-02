@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,9 +20,17 @@ export default function NewOrderPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [notes]);
 
   const handleQuantityChange = (productId: string, newQuantity: number) => {
     const updatedQuantity = Math.max(0, newQuantity);
@@ -183,9 +191,11 @@ export default function NewOrderPage() {
         </CardHeader>
         <CardContent>
           <Textarea
+            ref={textareaRef}
             placeholder="π.χ. παράδοση πριν τις 08:00..."
             value={notes}
             onChange={e => setNotes(e.target.value)}
+            className="resize-none"
           />
         </CardContent>
       </Card>
