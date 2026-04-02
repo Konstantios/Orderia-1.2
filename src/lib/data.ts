@@ -8,13 +8,13 @@ function getImage(id: string) {
 
 // Updated products to match the screenshot
 export const products: Product[] = [
-  { id: 'p1', code: 'ORD-0045', name: 'Κατεψυγμένη Πίτσα Special 8-τεμ', imageUrl: getImage('special-pizza').url, imageHint: getImage('special-pizza').hint },
-  { id: 'p2', code: 'ORD-0082', name: 'Κρουασάν Βουτύρου (Κούτα)', imageUrl: getImage('croissant').url, imageHint: getImage('croissant').hint },
-  { id: 'p3', code: 'ORD-0114', name: 'Μπουγάτσα Θεσσαλονίκης', imageUrl: getImage('bougatsa-thess').url, imageHint: getImage('bougatsa-thess').hint },
-  { id: 'p4', code: 'ORD-0021', name: 'Τυροπιτάκια Κουρού (Συσκ.)', imageUrl: getImage('kourou-pie').url, imageHint: getImage('kourou-pie').hint },
+  { id: 'p1', code: 'ORD-0045', name: 'Κατεψυγμένη Πίτσα Special 8-τεμ', imageUrl: getImage('special-pizza').url, imageHint: getImage('special-pizza').hint, unit: 'κιβώτιο' },
+  { id: 'p2', code: 'ORD-0082', name: 'Κρουασάν Βουτύρου (Κούτα)', imageUrl: getImage('croissant').url, imageHint: getImage('croissant').hint, unit: 'κιβώτιο' },
+  { id: 'p3', code: 'ORD-0114', name: 'Μπουγάτσα Θεσσαλονίκης', imageUrl: getImage('bougatsa-thess').url, imageHint: getImage('bougatsa-thess').hint, unit: 'κιλό' },
+  { id: 'p4', code: 'ORD-0021', name: 'Τυροπιτάκια Κουρού (Συσκ.)', imageUrl: getImage('kourou-pie').url, imageHint: getImage('kourou-pie').hint, unit: 'κιλό' },
   // Keep some old ones for other parts of the app to not break
-  { id: 'p5', code: '1030', name: 'Σπανακόπιτα', imageUrl: getImage('spinach-pie').url, imageHint: getImage('spinach-pie').hint },
-  { id: 'p6', code: '1035', name: 'Λουκανικοπιτάκι', imageUrl: getImage('sausage-roll').url, imageHint: getImage('sausage-roll').hint },
+  { id: 'p5', code: '1030', name: 'Σπανακόπιτα', imageUrl: getImage('spinach-pie').url, imageHint: getImage('spinach-pie').hint, unit: 'τεμάχιο' },
+  { id: 'p6', code: '1035', name: 'Λουκανικοπιτάκι', imageUrl: getImage('sausage-roll').url, imageHint: getImage('sausage-roll').hint, unit: 'τεμάχιο' },
 ];
 
 export const customers: Customer[] = [

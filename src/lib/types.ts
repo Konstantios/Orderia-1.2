@@ -4,6 +4,7 @@ export interface Product {
   name: string;
   imageUrl: string;
   imageHint: string;
+  unit: 'κιβώτιο' | 'κιλό' | 'τεμάχιο';
 }
 
 export interface CustomerProduct {

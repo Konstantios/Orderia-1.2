@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -187,6 +187,21 @@ export default function NewOrderPage() {
     router.push('/dashboard');
   };
 
+  const orderTotals = useMemo(() => {
+    return orderItems.reduce((acc, item) => {
+        const product = customerProducts.find(p => p.id === item.productId);
+        if (product) {
+            if (!acc[product.unit]) {
+                acc[product.unit] = 0;
+            }
+            acc[product.unit] += item.quantity;
+        }
+        return acc;
+    }, {} as Record<'κιβώτιο' | 'κιλό' | 'τεμάχιο', number>);
+  }, [orderItems]);
+
+  const totalItems = useMemo(() => orderItems.reduce((sum, item) => sum + item.quantity, 0), [orderItems]);
+
   return (
     <div className="space-y-6">
       
@@ -318,6 +333,32 @@ export default function NewOrderPage() {
           </div>
         </CardContent>
       </Card>
+
+      {totalItems > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Σύνολο Παραγγελίας</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Object.entries(orderTotals).map(([unit, total]) => {
+              if (total <= 0) return null;
+              
+              const unitText = {
+                'κιβώτιο': 'κιβώτια',
+                'κιλό': 'κιλά',
+                'τεμάχιο': 'τεμάχια'
+              }[unit] || unit;
+
+              return (
+                <div key={unit} className="flex justify-between items-center text-lg">
+                  <span>Σύνολο σε {unitText}:</span>
+                  <span className="font-bold text-xl">{total}</span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
