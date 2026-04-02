@@ -1,0 +1,57 @@
+export interface Product {
+  id: string;
+  code: string;
+  name: string;
+  imageUrl: string;
+  imageHint: string;
+}
+
+export interface CustomerProduct {
+  productId: string;
+  idealStock: number;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  products: CustomerProduct[];
+}
+
+export interface CustomerInventoryItem {
+  productId: string;
+  currentStock: number;
+}
+
+export interface OrderItem {
+  productId: string;
+  quantity: number;
+}
+
+export interface Order {
+  id: string;
+  date: string;
+  items: OrderItem[];
+  status: 'Pending' | 'Completed' | 'Shipped';
+  notes?: string;
+}
+
+export interface WholesalerStockItem {
+  productId: string;
+  quantity: number;
+}
+
+export interface AdminDashboardData {
+  todayOrders: number;
+  pendingOrders: number;
+  lowStockItems: number;
+  newCustomers: number;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  read: boolean;
+}

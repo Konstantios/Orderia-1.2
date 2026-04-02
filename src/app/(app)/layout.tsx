@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Icons } from '@/components/icons';
+import { cn } from '@/lib/utils';
+import { Bell } from 'lucide-react';
+
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: Icons.dashboard },
+  { href: '/orders/new', label: 'New Order', icon: Icons.newOrder },
+  { href: '/inventory', label: 'Inventory', icon: Icons.inventory },
+  { href: '/orders/history', label: 'History', icon: Icons.history },
+];
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  const getPageTitle = () => {
+    const currentNav = navItems.find(item => pathname.startsWith(item.href));
+    if (pathname === '/dashboard') return 'Welcome, Φούρνος "Η Γεύση"';
+    return currentNav?.label || 'Orderia';
+  };
+
+  return (
+    <div className="flex min-h-screen w-full flex-col">
+      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
+        <h1 className="flex-1 font-headline text-xl font-semibold tracking-tight">
+          {getPageTitle()}
+        </h1>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <Bell className="h-5 w-5 text-primary" />
+            <span className="sr-only">Toggle notifications</span>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar className="h-9 w-9 border-2 border-primary/50">
+                  <AvatarImage src="https://picsum.photos/seed/avatar/100/100" alt="Avatar" data-ai-hint="bakery owner" />
+                  <AvatarFallback>FG</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/">Logout</Link></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6">{children}</main>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background/95 backdrop-blur-sm md:hidden">
+        <div className="grid h-16 grid-cols-4 items-center justify-items-center">
+          {navItems.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={label}
+              href={href}
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 p-2 text-xs font-medium',
+                pathname.startsWith(href) ? 'text-accent' : 'text-muted-foreground'
+              )}
+            >
+              <Icon className="h-6 w-6" />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+}

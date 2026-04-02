@@ -1,3 +1,40 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "croissant",
+      "description": "Butter Croissant",
+      "imageUrl": "https://picsum.photos/seed/1012/400/300",
+      "imageHint": "croissant pastry"
+    },
+    {
+      "id": "piroski",
+      "description": "Cheese Piroski",
+      "imageUrl": "https://picsum.photos/seed/1018/400/300",
+      "imageHint": "cheese pie"
+    },
+    {
+      "id": "pizza-dough",
+      "description": "Pizza Dough",
+      "imageUrl": "https://picsum.photos/seed/1020/400/300",
+      "imageHint": "pizza dough"
+    },
+    {
+      "id": "bougatsa",
+      "description": "Cream Bougatsa",
+      "imageUrl": "https://picsum.photos/seed/1022/400/300",
+      "imageHint": "cream pastry"
+    },
+    {
+      "id": "spinach-pie",
+      "description": "Spinach Pie",
+      "imageUrl": "https://picsum.photos/seed/1030/400/300",
+      "imageHint": "spinach pie"
+    },
+    {
+      "id": "sausage-roll",
+      "description": "Sausage Roll",
+      "imageUrl": "https://picsum.photos/seed/1035/400/300",
+      "imageHint": "sausage pastry"
+    }
+  ]
 }
