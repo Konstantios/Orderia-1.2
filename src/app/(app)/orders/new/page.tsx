@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { products as allProducts, customerInventory, customers } from '@/lib/data';
+import { products as allProducts, customerInventory, customers, orderHistory } from '@/lib/data';
 import type { OrderItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Lightbulb, Loader2 } from 'lucide-react';
+import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
@@ -198,14 +198,14 @@ export default function NewOrderPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-headline text-3xl font-bold">Νέα Παραγγελία</h1>
         <Button 
           onClick={toggleSuggestionMode} 
           disabled={isLoading} 
           variant={isSuggestionModeActive ? 'default' : 'outline'}
           className={cn('sm:w-auto w-full', {
-            "bg-primary hover:bg-primary/90 text-primary-foreground": isSuggestionModeActive,
+            "bg-primary hover:bg-primary/90 text-primary-foreground border-primary": isSuggestionModeActive,
             "border-primary text-primary bg-transparent hover:bg-primary/10": !isSuggestionModeActive,
           })}
         >
@@ -228,28 +228,64 @@ export default function NewOrderPage() {
               <div
                 key={product.id}
                 className={cn(
-                  'flex flex-wrap items-center justify-between gap-y-4 gap-x-2 rounded-lg border p-4 transition-colors',
-                  getQuantity(product.id) > 0 && (isSuggestionModeActive ? 'border-primary bg-primary/10' : 'border-primary bg-primary/5')
+                  'flex flex-col gap-4 rounded-lg border p-4 transition-colors',
+                  getQuantity(product.id) > 0 && 'border-primary',
+                  isSuggestionModeActive && getQuantity(product.id) > 0 && 'bg-primary/10 border-2'
                 )}
               >
-                <div className="flex items-center gap-4">
-                  <div className="relative h-20 w-20 flex-shrink-0">
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.name}
-                      width={100}
-                      height={100}
-                      data-ai-hint={product.imageHint}
-                      className="h-full w-full rounded-md object-cover"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.code}</p>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="relative h-20 w-20 flex-shrink-0">
+                      <Image
+                        src={product.imageUrl}
+                        alt={product.name}
+                        width={100}
+                        height={100}
+                        data-ai-hint={product.imageHint}
+                        className="h-full w-full rounded-md object-cover"
+                      />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{product.name}</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-sm text-muted-foreground">{product.code}</p>
+                        {(() => {
+                          const lastOrder = orderHistory.length > 0 ? orderHistory[0] : undefined;
+                          const lastOrderItem = lastOrder?.items.find(
+                            (item) => item.productId === product.id
+                          );
+                          const lastOrderQuantity = lastOrderItem?.quantity || 0;
+                          const currentQuantity = getQuantity(product.id);
+
+                          if (lastOrderQuantity === 0) {
+                            return null;
+                          }
+
+                          let indicator = null;
+
+                          if (currentQuantity > lastOrderQuantity) {
+                            indicator = <ArrowUp className="h-3 w-3 text-green-400" />;
+                          } else if (currentQuantity < lastOrderQuantity) {
+                            indicator = <ArrowDown className="h-3 w-3 text-destructive" />;
+                          } else if (currentQuantity > 0) { // same quantity and not zero
+                            indicator = <Minus className="h-3 w-3 text-muted-foreground" />;
+                          }
+
+                          if (!indicator) return null;
+
+                          return (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <span>(προηγ: {lastOrderQuantity})</span>
+                              {indicator}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="flex items-center justify-end gap-3 flex-grow sm:flex-grow-0">
+                <div className="flex items-center justify-end gap-3 flex-grow sm:flex-grow-0 ml-auto">
                   <Button
                     variant="outline"
                     size="icon"
