@@ -48,9 +48,9 @@ export default function InventoryPage() {
                     <TabsList>
                         <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
                         <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
-                        <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
                         <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
                         <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
+                        <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
                     </TabsList>
                 </div>
                 <TabsContent value="stock" className="mt-6">

@@ -222,6 +222,7 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
 export function InventoryDatabase({ products: initialProducts }: { products: Product[] }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   
   useEffect(() => {
     // This is where you would load products from localStorage
@@ -258,7 +259,7 @@ export function InventoryDatabase({ products: initialProducts }: { products: Pro
           {products.length > 0 ? (
             <div className="space-y-3">
               {products.map(product => (
-                <Card key={product.id} className="bg-card/50">
+                <Card key={product.id} className="bg-card/50 cursor-pointer hover:bg-card/70" onClick={() => setSelectedProduct(product)}>
                   <div className="p-3 flex items-center gap-4">
                     <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-md object-cover" data-ai-hint={product.imageHint} />
                     <div className="flex-1">
@@ -292,6 +293,33 @@ export function InventoryDatabase({ products: initialProducts }: { products: Pro
         onOpenChange={setIsAddProductOpen}
         onProductAdd={addProduct}
       />
+
+      <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
+        <DialogContent>
+          {selectedProduct && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedProduct.name}</DialogTitle>
+                <DialogDescription>SKU: {selectedProduct.code}</DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-center p-4 bg-white rounded-md my-4">
+                <Image
+                  src={`https://barcode.tec-it.com/barcode.ashx?data=${selectedProduct.code}&code=Code128&dpi=96`}
+                  alt={`Barcode for ${selectedProduct.name}`}
+                  width={300}
+                  height={100}
+                  className="object-contain"
+                />
+              </div>
+              <DialogFooter>
+                  <DialogClose asChild>
+                      <Button type="button" variant="secondary">Κλείσιμο</Button>
+                  </DialogClose>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
