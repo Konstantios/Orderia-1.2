@@ -11,6 +11,7 @@ import {
   ScanLine,
   Plus,
   Minus,
+  Truck,
 } from 'lucide-react';
 
 export const Icons = {
@@ -25,6 +26,7 @@ export const Icons = {
   scan: ScanLine,
   plus: Plus,
   minus: Minus,
+  suppliers: Truck,
 };
 
 export type Icon = keyof typeof Icons;

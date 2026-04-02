@@ -10,10 +10,11 @@ import { cn } from '@/lib/utils';
 import { Bell } from 'lucide-react';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: Icons.dashboard },
-  { href: '/orders/new', label: 'New Order', icon: Icons.newOrder },
-  { href: '/inventory', label: 'Inventory', icon: Icons.inventory },
-  { href: '/orders/history', label: 'History', icon: Icons.history },
+  { href: '/dashboard', label: 'Αρχική', icon: Icons.dashboard },
+  { href: '/suppliers', label: 'Προμηθευτές', icon: Icons.suppliers },
+  { href: '/orders/new', label: 'Νέα Παραγγελία', icon: Icons.newOrder },
+  { href: '/inventory', label: 'Αποθήκη', icon: Icons.inventory },
+  { href: '/orders/history', label: 'Ιστορικό', icon: Icons.history },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const getPageTitle = () => {
     const currentNav = navItems.find(item => pathname.startsWith(item.href));
-    if (pathname === '/dashboard') return 'Welcome, Φούρνος "Η Γεύση"';
+    if (pathname === '/dashboard') return 'Καλώς ήρθες, Φούρνος "Η Γεύση"';
     return currentNav?.label || 'Orderia';
   };
 
@@ -60,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto p-4 pb-20 md:px-6 md:pt-6">{children}</main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background/95 backdrop-blur-sm">
-        <div className="grid h-16 grid-cols-4 items-center justify-items-center">
+        <div className="grid h-16 grid-cols-5 items-center justify-items-center">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={label}
