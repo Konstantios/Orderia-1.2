@@ -8,6 +8,7 @@ import { products as allProducts, customerInventory as initialInventory, custome
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { InventoryCounting } from './counting';
 
 
 const supplier = customers[0];
@@ -45,7 +46,7 @@ export default function InventoryPage() {
                 <div className="flex justify-center">
                     <TabsList>
                         <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
-                        <TabsTrigger value="counting" disabled>Καταμέτρηση</TabsTrigger>
+                        <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
                         <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
                         <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
                     </TabsList>
@@ -108,6 +109,9 @@ export default function InventoryPage() {
                             </AccordionItem>
                         </Accordion>
                     </div>
+                </TabsContent>
+                <TabsContent value="counting" className="mt-6">
+                    <InventoryCounting products={inventoryProducts} customer={supplier} />
                 </TabsContent>
             </Tabs>
         </div>

@@ -25,6 +25,12 @@
       "imageHint": "cheese pie"
     },
     {
+      "id": "warehouse-background",
+      "description": "Warehouse shelves background",
+      "imageUrl": "https://picsum.photos/seed/wh-bg/600/200",
+      "imageHint": "warehouse shelves"
+    },
+    {
       "id": "frozen-foods-logo",
       "description": "Frozen Foods Logo",
       "imageUrl": "https://picsum.photos/seed/ff-logo/100/100",
