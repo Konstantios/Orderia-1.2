@@ -72,7 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Αποσύνδεση">
-                            <Link href="/page.tsx">
+                            <Link href="/">
                                 <LogOut />
                                 <span>Αποσύνδεση</span>
                             </Link>
