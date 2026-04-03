@@ -17,6 +17,7 @@ export default function AdminOrdersPage() {
     const router = useRouter();
     const { toast } = useToast();
     const [orders] = useState<Order[]>(adminOrders);
+    const [activeTab, setActiveTab] = useState("today_delivery");
 
     const todayDayName = 'Τρίτη'; // Hardcoded for demo purposes
 
@@ -35,13 +36,18 @@ export default function AdminOrdersPage() {
         c => !customersWhoOrderedToday.has(c.companyName)
     );
     
-    const handleExportAll = () => {
-        const ordersToExport = orders; 
+    const handleExport = () => {
+        let ordersToExport: Order[];
+        if (activeTab === 'today_delivery') {
+            ordersToExport = ordersForTodayDelivery;
+        } else {
+            ordersToExport = orders;
+        }
 
         if (ordersToExport.length === 0) {
             toast({
                 title: "Δεν υπάρχουν παραγγελίες",
-                description: "Δεν βρέθηκαν παραγγελίες για εξαγωγή.",
+                description: "Δεν βρέθηκαν παραγγελίες για εξαγωγή σε αυτήν την προβολή.",
                 variant: "destructive"
             });
             return;
@@ -90,7 +96,8 @@ export default function AdminOrdersPage() {
         }));
         worksheet['!cols'] = colWidths;
 
-        XLSX.writeFile(workbook, `Συνολικές_Παραγγελίες.xlsx`);
+        const fileName = activeTab === 'today_delivery' ? 'Σημερινή_Παράδοση.xlsx' : 'Συνολικές_Παραγγελίες.xlsx';
+        XLSX.writeFile(workbook, fileName);
     };
 
     const renderOrderList = (orderList: Order[]) => {
@@ -125,11 +132,11 @@ export default function AdminOrdersPage() {
               <h1 className="text-lg font-semibold md:text-2xl">Παραγγελίες</h1>
               <div className="flex gap-2">
                 <Button variant="outline"><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
-                <Button variant="outline" onClick={handleExportAll}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
+                <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
               </div>
             </div>
             
-            <Tabs defaultValue="today_delivery">
+            <Tabs defaultValue="today_delivery" onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="today_delivery">Σημερινή Παράδοση</TabsTrigger>
                     <TabsTrigger value="all_orders">Όλες οι Παραγγελίες</TabsTrigger>
