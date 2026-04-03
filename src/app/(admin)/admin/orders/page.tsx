@@ -18,12 +18,7 @@ export default function AdminOrdersPage() {
     const { toast } = useToast();
     const [orders] = useState<Order[]>(adminOrders);
 
-    const getTodayGreekDay = () => {
-        const day = new Date().toLocaleDateString('el-GR', { weekday: 'long' });
-        return day.charAt(0).toUpperCase() + day.slice(1);
-    };
-
-    const todayDayName = getTodayGreekDay();
+    const todayDayName = 'Τρίτη'; // Hardcoded for demo purposes
 
     // Customers who should have delivery today
     const customersForTodayDelivery = adminCustomers.filter(c => c.deliveryDay === todayDayName);

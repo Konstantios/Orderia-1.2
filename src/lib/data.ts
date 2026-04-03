@@ -79,6 +79,26 @@ export const adminCustomers: AdminCustomer[] = [
     googleMapsLink: 'https://maps.app.goo.gl/abcde',
     deliveryDay: 'Πέμπτη',
     contactName: 'Ελένη Κώστα'
+  },
+  {
+    id: 'cust-4',
+    companyName: 'Cafe "Η Γωνιά"',
+    vatNumber: '223344556',
+    phone1: '2106666666',
+    address: 'Λεωφόρος Κηφισίας 1, 11523, Αθήνα',
+    googleMapsLink: 'https://maps.app.goo.gl/fghij',
+    deliveryDay: 'Τρίτη',
+    contactName: 'Άννα Ιωάννου'
+  },
+  {
+    id: 'cust-5',
+    companyName: 'Mini Market "Το Παντοπωλείο"',
+    vatNumber: '334455667',
+    phone1: '2107777777',
+    address: 'Βασιλίσσης Σοφίας 25, 10674, Αθήνα',
+    googleMapsLink: 'https://maps.app.goo.gl/klmno',
+    deliveryDay: 'Τρίτη',
+    contactName: 'Κώστας Δημητρίου'
   }
 ];
 
@@ -160,6 +180,15 @@ export const adminOrders: Order[] = [
             { productId: 'p2', quantity: 20 },
         ],
         status: 'Ολοκληρωμένη',
+    },
+    {
+        id: 'ORD-005',
+        customerName: 'Mini Market "Το Παντοπωλείο"',
+        date: today.toISOString(),
+        items: [
+            { productId: 'p4', quantity: 20 },
+        ],
+        status: 'Εκκρεμής',
     },
 ];
 
