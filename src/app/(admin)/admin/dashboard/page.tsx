@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -18,6 +17,7 @@ import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { cn } from "@/lib/utils"
 import { CheckCircle, Clock } from "lucide-react"
+import { useState, useEffect } from "react"
 
 const kpis = [
   { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
@@ -51,17 +51,15 @@ const dailyRoutine = [
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const [currentRoutine, setCurrentRoutine] = useState(
+    dailyRoutine.map(item => ({ ...item, displayStatus: item.status }))
+  );
 
-  const handleRoleChange = (role: string) => {
-    if (role === 'store') {
-      router.push('/');
-    }
-  };
+  useEffect(() => {
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
 
-  const now = new Date();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-
-  const getStatus = (timeRange: string, status: string) => {
+    const getStatus = (timeRange: string, status: string) => {
       if (status === 'completed') return 'completed';
       const [start] = timeRange.split(' - ');
       const [startHour, startMinute] = start.split(':').map(Number);
@@ -71,7 +69,21 @@ export default function AdminDashboardPage() {
       if (status === 'ongoing') return 'ongoing';
 
       return 'pending';
-  }
+    };
+
+    const updatedRoutine = dailyRoutine.map(item => ({
+      ...item,
+      displayStatus: getStatus(item.time, item.status)
+    }));
+
+    setCurrentRoutine(updatedRoutine);
+  }, []);
+
+  const handleRoleChange = (role: string) => {
+    if (role === 'store') {
+      router.push('/');
+    }
+  };
 
   return (
     <>
@@ -138,8 +150,8 @@ export default function AdminDashboardPage() {
                     <CardDescription>Η πρόοδος των σημερινών εργασιών</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {dailyRoutine.map(item => {
-                       const status = getStatus(item.time, item.status);
+                    {currentRoutine.map(item => {
+                       const status = item.displayStatus;
                        return (
                         <div key={item.task} className="flex items-start gap-3">
                             <div>
