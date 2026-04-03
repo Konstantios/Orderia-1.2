@@ -6,22 +6,40 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { adminOrders, products } from "@/lib/data";
+import { adminOrders, products, adminCustomers } from "@/lib/data";
 import type { Order } from "@/lib/types";
 import { Download, History } from "lucide-react";
-import { isToday, isYesterday } from 'date-fns';
+import { isToday } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
-
 
 export default function AdminOrdersPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const [orders, setOrders] = useState<Order[]>(adminOrders);
-    
-    const todaysOrders = orders.filter(o => isToday(new Date(o.date)));
-    const yesterdaysOrders = orders.filter(o => isYesterday(new Date(o.date)));
+    const [orders] = useState<Order[]>(adminOrders);
 
+    const getTodayGreekDay = () => {
+        const day = new Date().toLocaleDateString('el-GR', { weekday: 'long' });
+        return day.charAt(0).toUpperCase() + day.slice(1);
+    };
+
+    const todayDayName = getTodayGreekDay();
+
+    // Customers who should have delivery today
+    const customersForTodayDelivery = adminCustomers.filter(c => c.deliveryDay === todayDayName);
+    const customerNamesForTodayDelivery = new Set(customersForTodayDelivery.map(c => c.companyName));
+
+    // Orders placed today by those customers
+    const ordersForTodayDelivery = orders.filter(o => 
+        customerNamesForTodayDelivery.has(o.customerName) && isToday(new Date(o.date))
+    );
+
+    // Customers for today who haven't placed an order today
+    const customersWhoOrderedToday = new Set(ordersForTodayDelivery.map(o => o.customerName));
+    const customersWithoutOrdersToday = customersForTodayDelivery.filter(
+        c => !customersWhoOrderedToday.has(c.companyName)
+    );
+    
     const handleExportAll = () => {
         const ordersToExport = orders; 
 
@@ -82,7 +100,7 @@ export default function AdminOrdersPage() {
 
     const renderOrderList = (orderList: Order[]) => {
       if (orderList.length === 0) {
-        return <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν παραγγελίες για αυτή την ημέρα.</p>
+        return <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν παραγγελίες.</p>
       }
       return (
         <div className="space-y-4">
@@ -92,7 +110,7 @@ export default function AdminOrdersPage() {
                   <div className="flex justify-between items-start">
                     <div>
                         <CardTitle className="text-lg">{order.customerName}</CardTitle>
-                        <CardDescription>ID: #{order.id}</CardDescription>
+                        <CardDescription>ID: #{order.id} &bull; {new Date(order.date).toLocaleDateString('el-GR')}</CardDescription>
                     </div>
                     <Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'}>{order.status}</Badge>
                   </div>
@@ -116,16 +134,67 @@ export default function AdminOrdersPage() {
               </div>
             </div>
             
-            <Tabs defaultValue="today">
+            <Tabs defaultValue="today_delivery">
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="today">Σήμερα</TabsTrigger>
-                    <TabsTrigger value="yesterday">Χθες</TabsTrigger>
+                    <TabsTrigger value="today_delivery">Σημερινή Παράδοση</TabsTrigger>
+                    <TabsTrigger value="all_orders">Όλες οι Παραγγελίες</TabsTrigger>
                 </TabsList>
-                <TabsContent value="today" className="mt-4">
-                   {renderOrderList(todaysOrders)}
+                <TabsContent value="today_delivery" className="mt-4">
+                    <div className="space-y-4">
+                        {ordersForTodayDelivery.map(order => (
+                            <Card key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/orders/${order.id}`)}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="text-lg">{order.customerName}</CardTitle>
+                                            <CardDescription>ID: #{order.id}</CardDescription>
+                                        </div>
+                                        <Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'}>{order.status}</Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm text-muted-foreground">{order.items.length} προϊόντα • Σύνολο {order.items.reduce((acc, item) => acc + item.quantity, 0)} τεμάχια</p>
+                                </CardContent>
+                            </Card>
+                        ))}
+
+                        {ordersForTodayDelivery.length > 0 && customersWithoutOrdersToday.length > 0 && (
+                            <div className="relative py-4">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t" />
+                                </div>
+                                <div className="relative flex justify-center">
+                                    <span className="bg-background px-2 text-xs uppercase text-muted-foreground">
+                                        Δεν έχουν παραγγείλει
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {customersWithoutOrdersToday.map(customer => (
+                            <Card key={customer.id} className="opacity-60 bg-muted/20">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="text-lg">{customer.companyName}</CardTitle>
+                                            <CardDescription>Δεν έχει υποβληθεί παραγγελία</CardDescription>
+                                        </div>
+                                        <Badge variant="outline">Εκκρεμεί</Badge>
+                                    </div>
+                                </CardHeader>
+                                 <CardContent>
+                                    <p className="text-sm text-muted-foreground">Τηλέφωνο: {customer.phone1}</p>
+                                </CardContent>
+                            </Card>
+                        ))}
+                        
+                        {ordersForTodayDelivery.length === 0 && customersWithoutOrdersToday.length === 0 && (
+                            <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν παραγγελίες ή πελάτες για παράδοση σήμερα.</p>
+                        )}
+                   </div>
                 </TabsContent>
-                <TabsContent value="yesterday" className="mt-4">
-                   {renderOrderList(yesterdaysOrders)}
+                <TabsContent value="all_orders" className="mt-4">
+                   {renderOrderList(orders)}
                 </TabsContent>
             </Tabs>
         </div>
