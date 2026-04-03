@@ -8,10 +8,17 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { orderHistory, products } from '@/lib/data';
 import { History } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function OrderHistoryPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const handleReorder = (orderId: string) => {
     toast({
@@ -31,7 +38,7 @@ export default function OrderHistoryPage() {
             <CardHeader className="flex-row items-center justify-between bg-muted/30">
               <div>
                 <CardTitle className="text-lg">Παραγγελία #{order.id}</CardTitle>
-                <CardDescription>{new Date(order.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</CardDescription>
+                <CardDescription>{isClient ? new Date(order.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null}</CardDescription>
               </div>
               <Badge variant={order.status === 'Ολοκληρωμένη' ? 'secondary' : 'default'}>{order.status}</Badge>
             </CardHeader>
