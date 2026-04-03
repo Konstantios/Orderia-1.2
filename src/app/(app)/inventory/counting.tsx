@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -229,19 +229,21 @@ export function InventoryCounting({ products, customer }: { products: Product[];
         </div>
       </Card>
       
-      <div className="flex justify-between items-center py-2">
-        <div>
-          <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Αποτελεσματα Καταμετρησης</h4>
-          <p className="text-xs text-muted-foreground">Σύνολο σαρωμένων τεμαχίων: {totalScannedItems}</p>
-        </div>
-        <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-          <span className="relative flex h-2 w-2 mr-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-          </span>
-          Ζωντανός Συγχρονισμός
-        </Badge>
-      </div>
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Σύνολο Σαρωμένων Τεμαχίων</p>
+            <p className="text-4xl font-bold">{totalScannedItems}</p>
+          </div>
+          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 self-start">
+            <span className="relative flex h-2 w-2 mr-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            Ζωντανός Συγχρονισμός
+          </Badge>
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
         {inventoryData.map(({ product, currentStock, idealStock }) => {
@@ -254,7 +256,7 @@ export function InventoryCounting({ products, customer }: { products: Product[];
               <h4 className="font-semibold">{product.name}</h4>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-accent/20 p-2">
-                  <p className="text-[11px] font-semibold uppercase text-accent/80">Σκαναρ.</p>
+                  <p className="text-[11px] font-semibold uppercase text-accent/80">ΣΚΑΝΑΡ.</p>
                   <p className="text-2xl font-bold text-accent">{scannedCount}</p>
                 </div>
                 <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
