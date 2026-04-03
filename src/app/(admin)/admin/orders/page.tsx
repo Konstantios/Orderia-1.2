@@ -1,101 +1,34 @@
 'use client';
 
 import { useState } from "react";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { adminOrders, products } from "@/lib/data";
-import type { Order, OrderItem } from "@/lib/types";
+import { adminOrders } from "@/lib/data";
+import type { Order } from "@/lib/types";
 import { Download, History } from "lucide-react";
-import { format, isToday, isYesterday } from 'date-fns';
-import { el } from 'date-fns/locale';
-
-function OrderDetailsDialog({ order, products, onNotesChange, open, onOpenChange }: { order: Order; products: typeof import('@/lib/data').products; onNotesChange: (orderId: string, notes: string) => void; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [supplierNotes, setSupplierNotes] = useState(order.supplierNotes || "");
-  const { toast } = useToast();
-
-  const handleSaveNotes = () => {
-    onNotesChange(order.id, supplierNotes);
-    toast({ title: "Οι σημειώσεις αποθηκεύτηκαν!" });
-    onOpenChange(false);
-  };
-  
-  const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
-  
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Παραγγελία #{order.id}</DialogTitle>
-          <DialogDescription>
-            {order.customerName} - {format(new Date(order.date), 'PPpp', { locale: el })}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto pr-4">
-          <ul className="space-y-4">
-            {order.items.map((item: OrderItem) => {
-              const product = products.find(p => p.id === item.productId);
-              if (!product) return null;
-              return (
-                <li key={item.productId} className="flex items-center gap-4">
-                  <Image src={product.imageUrl} alt={product.name} width={56} height={56} className="rounded-md object-cover" data-ai-hint={product.imageHint} />
-                  <div className="flex-1">
-                    <p className="font-semibold">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.code}</p>
-                  </div>
-                  <div className="text-right">
-                      <p className="font-bold text-lg">{item.quantity}</p>
-                      <p className="text-xs text-muted-foreground">{product.unit}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          
-          <Separator className="my-4" />
-
-          {order.notes && (
-            <div className="space-y-2">
-                <h4 className="font-semibold text-sm">Σημειώσεις Πελάτη</h4>
-                <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">{order.notes}</p>
-            </div>
-          )}
-
-          <div className="space-y-2 mt-4">
-            <h4 className="font-semibold text-sm">Οι Σημειώσεις σας</h4>
-            <Textarea
-              placeholder="Προσθέστε σημειώσεις για την ομάδα σας..."
-              value={supplierNotes}
-              onChange={(e) => setSupplierNotes(e.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Κλείσιμο</Button>
-          <Button onClick={handleSaveNotes}>Αποθήκευση Σημειώσεων</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { isToday, isYesterday } from 'date-fns';
+import { useToast } from "@/hooks/use-toast";
 
 
 export default function AdminOrdersPage() {
+    const router = useRouter();
+    const { toast } = useToast();
     const [orders, setOrders] = useState<Order[]>(adminOrders);
-    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-
-    const handleNotesChange = (orderId: string, notes: string) => {
-        setOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, supplierNotes: notes } : o));
-    };
     
     const todaysOrders = orders.filter(o => isToday(new Date(o.date)));
     const yesterdaysOrders = orders.filter(o => isYesterday(new Date(o.date)));
+
+    // Note: Excel export for all orders is not implemented in this step.
+    const handleExportAll = () => {
+        toast({
+            variant: "destructive",
+            title: "Λειτουργία υπό κατασκευή",
+            description: "Η εξαγωγή όλων των παραγγελιών δεν είναι ακόμα διαθέσιμη.",
+        });
+    };
 
     const renderOrderList = (orderList: Order[]) => {
       if (orderList.length === 0) {
@@ -104,7 +37,7 @@ export default function AdminOrdersPage() {
       return (
         <div className="space-y-4">
           {orderList.map(order => (
-            <Card key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedOrder(order)}>
+            <Card key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/orders/${order.id}`)}>
               <CardHeader>
                   <div className="flex justify-between items-start">
                     <div>
@@ -129,7 +62,7 @@ export default function AdminOrdersPage() {
               <h1 className="text-lg font-semibold md:text-2xl">Παραγγελίες</h1>
               <div className="flex gap-2">
                 <Button variant="outline"><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
-                <Button variant="outline"><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
+                <Button variant="outline" onClick={handleExportAll}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
               </div>
             </div>
             
@@ -145,16 +78,6 @@ export default function AdminOrdersPage() {
                    {renderOrderList(yesterdaysOrders)}
                 </TabsContent>
             </Tabs>
-            
-            {selectedOrder && (
-              <OrderDetailsDialog 
-                order={selectedOrder} 
-                products={products}
-                onNotesChange={handleNotesChange}
-                open={!!selectedOrder}
-                onOpenChange={(open) => { if(!open) setSelectedOrder(null) }}
-              />
-            )}
         </div>
     );
 }
