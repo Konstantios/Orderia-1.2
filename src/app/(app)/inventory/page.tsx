@@ -14,6 +14,8 @@ import { Separator } from '@/components/ui/separator';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { InventoryEntry } from './entry';
+import { InventoryExit } from './exit';
 
 
 const getStockColor = (current: number, ideal: number) => {
@@ -38,7 +40,7 @@ export default function InventoryPage() {
     const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
     const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
 
-    const handleInventorySync = (scannedItems: Record<string, number>) => {
+    const handleCountingSync = (scannedItems: Record<string, number>) => {
         if (Object.keys(scannedItems).length === 0) {
             toast({
                 variant: 'destructive',
@@ -69,6 +71,48 @@ export default function InventoryPage() {
         });
     };
     
+    const handleInSync = (scannedItems: Record<string, number>) => {
+        if (Object.keys(scannedItems).length === 0) {
+            toast({ variant: 'destructive', title: 'Δεν υπάρχουν δεδομένα', description: 'Παρακαλώ σκανάρετε κάποια προϊόντα για είσοδο.' });
+            return;
+        }
+        setInventory(prevInventory => {
+            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
+            for (const [productId, count] of Object.entries(scannedItems)) {
+                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
+                const newStock = existingItem.currentStock + count;
+                inventoryMap.set(productId, {
+                    ...existingItem,
+                    currentStock: newStock,
+                    lastAction: { type: 'είσοδος', value: count }
+                });
+            }
+            return Array.from(inventoryMap.values());
+        });
+        toast({ title: 'Η Είσοδος Ολοκληρώθηκε!', description: 'Το απόθεμα ενημερώθηκε.' });
+    };
+
+    const handleOutSync = (scannedItems: Record<string, number>) => {
+        if (Object.keys(scannedItems).length === 0) {
+            toast({ variant: 'destructive', title: 'Δεν υπάρχουν δεδομένα', description: 'Παρακαλώ σκανάρετε κάποια προϊόντα για έξοδο.' });
+            return;
+        }
+        setInventory(prevInventory => {
+            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
+            for (const [productId, count] of Object.entries(scannedItems)) {
+                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
+                const newStock = Math.max(0, existingItem.currentStock - count);
+                inventoryMap.set(productId, {
+                    ...existingItem,
+                    currentStock: newStock,
+                    lastAction: { type: 'έξοδος', value: count }
+                });
+            }
+            return Array.from(inventoryMap.values());
+        });
+        toast({ title: 'Η Έξοδος Ολοκληρώθηκε!', description: 'Το απόθεμα ενημερώθηκε.' });
+    };
+
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
         const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
@@ -99,8 +143,8 @@ export default function InventoryPage() {
                     <TabsList className="flex-wrap h-auto">
                         <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
                         <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
-                        <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
-                        <TabsTrigger value="out" disabled>Έξοδος</TabsTrigger>
+                        <TabsTrigger value="in">Είσοδος</TabsTrigger>
+                        <TabsTrigger value="out">Έξοδος</TabsTrigger>
                         <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
                     </TabsList>
                 </div>
@@ -186,7 +230,13 @@ export default function InventoryPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="counting" className="mt-6">
-                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleInventorySync} />
+                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleCountingSync} />
+                </TabsContent>
+                <TabsContent value="in" className="mt-6">
+                    <InventoryEntry products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleInSync} />
+                </TabsContent>
+                 <TabsContent value="out" className="mt-6">
+                    <InventoryExit products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleOutSync} />
                 </TabsContent>
                 <TabsContent value="database" className="mt-6">
                     <InventoryDatabase products={inventoryProducts} />

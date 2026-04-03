@@ -59,7 +59,7 @@ const playBeep = () => {
     }
 };
 
-export function InventoryCounting({ products, customer, inventory, onSync }: { products: Product[]; customer: Customer; inventory: CustomerInventoryItem[], onSync: (scannedItems: Record<string, number>) => void }) {
+export function InventoryEntry({ products, customer, inventory, onSync }: { products: Product[]; customer: Customer; inventory: CustomerInventoryItem[], onSync: (scannedItems: Record<string, number>) => void }) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
@@ -94,9 +94,9 @@ export function InventoryCounting({ products, customer, inventory, onSync }: { p
       [product.id]: (prev[product.id] || 0) + 1,
     }));
 
-    toast({ title: "Επιτυχής Καταμέτρηση!", description: `Προστέθηκε: ${product.name}` });
+    toast({ title: "Επιτυχής Καταχώρηση Εισόδου!", description: `Προστέθηκε: ${product.name}` });
 
-    const element = document.getElementById(`counting-product-${product.id}`);
+    const element = document.getElementById(`entry-product-${product.id}`);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     setProductForConfirmation(null);
@@ -165,7 +165,7 @@ export function InventoryCounting({ products, customer, inventory, onSync }: { p
             } finally {
                 isDetecting = false;
             }
-          }, 500); // Slightly longer interval
+          }, 500);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
@@ -223,8 +223,8 @@ export function InventoryCounting({ products, customer, inventory, onSync }: { p
             <div className="bg-accent/80 backdrop-blur-sm rounded-full p-3 border-2 border-accent-foreground/50 mb-2 transition-transform duration-300 group-hover:scale-110">
               <Camera className="h-6 w-6 text-accent-foreground" />
             </div>
-            <h3 className="text-white font-bold text-xl drop-shadow-md">Σκανάρισμα Barcode</h3>
-            <p className="text-white/80 text-sm drop-shadow-sm">Έναρξη εισαγωγής ειδών με ακρίβεια</p>
+            <h3 className="text-white font-bold text-xl drop-shadow-md">Σκανάρισμα για Είσοδο</h3>
+            <p className="text-white/80 text-sm drop-shadow-sm">Σαρώστε προϊόντα για να τα προσθέσετε στο απόθεμα</p>
           </div>
         </div>
       </Card>
@@ -253,14 +253,14 @@ export function InventoryCounting({ products, customer, inventory, onSync }: { p
         {inventoryData.map(({ product, currentStock, idealStock }) => {
           const scannedCount = scannedItems[product.id] || 0;
           return (
-          <Card key={product.id} id={`counting-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", (scannedItems[product.id] || 0) > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
+          <Card key={product.id} id={`entry-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", scannedCount > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
             <div className={cn("p-3")}>
               {currentStock <= idealStock / 3 && idealStock > 0 && <p className="text-xs font-bold uppercase text-destructive mb-1">Κρίσιμη Έλλειψη</p>}
               <p className="text-xs text-muted-foreground">SKU: {product.code}</p>
               <h4 className="font-semibold">{product.name}</h4>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-accent/20 p-2">
-                  <p className="text-[11px] font-semibold uppercase text-accent/80">ΣΚΑΝΑΡ.</p>
+                  <p className="text-[11px] font-semibold uppercase text-accent/80">ΕΙΣΟΔΟΣ</p>
                   <p className="text-2xl font-bold text-accent">{scannedCount}</p>
                 </div>
                 <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
@@ -284,7 +284,7 @@ export function InventoryCounting({ products, customer, inventory, onSync }: { p
                 <DialogHeader>
                     <DialogTitle>Επιβεβαίωση Σάρωσης</DialogTitle>
                     <DialogDescription>
-                        Το προϊόν βρέθηκε. Πατήστε "Επιβεβαίωση" για να αυξήσετε την καταμέτρηση.
+                        Το προϊόν βρέθηκε. Πατήστε "Επιβεβαίωση" για να αυξήσετε την καταμέτρηση εισόδου.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex items-center gap-4 my-4 p-4 bg-muted/50 rounded-lg">
