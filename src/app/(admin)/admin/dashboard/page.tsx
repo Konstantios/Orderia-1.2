@@ -1,3 +1,5 @@
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Icons } from "@/components/icons"
 import { adminDashboardData } from "@/lib/data"
@@ -10,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter } from "next/navigation"
 
 const kpis = [
   { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
@@ -25,8 +29,24 @@ const recentOrders = [
 ]
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+
+  const handleRoleChange = (role: string) => {
+    if (role === 'store') {
+      router.push('/');
+    }
+  };
+
   return (
     <div className="space-y-8">
+      <div className="flex justify-center">
+        <Tabs defaultValue="supplier" onValueChange={handleRoleChange} className="w-full max-w-sm">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="store">Κατάστημα</TabsTrigger>
+                <TabsTrigger value="supplier">Προμηθευτής</TabsTrigger>
+            </TabsList>
+        </Tabs>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {kpis.map(kpi => (
           <Card key={kpi.title}>

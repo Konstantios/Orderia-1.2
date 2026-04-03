@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
   const handleRoleChange = (role: string) => {
     if (role === 'supplier') {
-      router.push('/admin/dashboard');
+      router.push('/');
     }
   };
 
