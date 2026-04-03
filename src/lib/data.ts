@@ -60,6 +60,7 @@ export const customerInventory: CustomerInventoryItem[] = [
 export const orderHistory: Order[] = [
   {
     id: 'o1',
+    customerName: 'Φούρνος "Η Γεύση"',
     date: '2023-10-18T10:00:00Z',
     items: [{ productId: 'p2', quantity: 7 }, { productId: 'p5', quantity: 8 }],
     status: 'Ολοκληρωμένη',
@@ -67,17 +68,67 @@ export const orderHistory: Order[] = [
   },
   {
     id: 'o2',
+    customerName: 'Φούρνος "Η Γεύση"',
     date: '2023-10-11T10:00:00Z',
     items: [{ productId: 'p2', quantity: 5 }],
     status: 'Ολοκληρωμένη',
   },
   {
     id: 'o3',
+    customerName: 'Φούρνος "Η Γεύση"',
     date: '2023-10-04T10:00:00Z',
     items: [{ productId: 'p2', quantity: 8 }, { productId: 'p5', quantity: 6 }],
     status: 'Ολοκληρωμένη',
   },
 ];
+
+const today = new Date();
+const yesterday = new Date();
+yesterday.setDate(today.getDate() - 1);
+
+export const adminOrders: Order[] = [
+    {
+        id: 'ORD-001',
+        customerName: 'Φούρνος "Η Γεύση"',
+        date: today.toISOString(),
+        items: [
+            { productId: 'p1', quantity: 5 },
+            { productId: 'p3', quantity: 10 },
+        ],
+        status: 'Εκκρεμής',
+        notes: 'Παράδοση κοντά στην πλαϊνή είσοδο παρακαλώ.'
+    },
+    {
+        id: 'ORD-002',
+        customerName: 'Snack Bar "Το Γρήγορο"',
+        date: today.toISOString(),
+        items: [
+            { productId: 'p6', quantity: 15 },
+        ],
+        status: 'Εκκρεμής',
+    },
+    {
+        id: 'ORD-003',
+        customerName: 'Φούρνος "Η Γεύση"',
+        date: yesterday.toISOString(),
+        items: [
+            { productId: 'p2', quantity: 8 },
+            { productId: 'p4', quantity: 12 },
+        ],
+        status: 'Απεσταλμένη',
+        supplierNotes: 'Ο οδηγός ενημερώθηκε για την αλλαγή ώρας.'
+    },
+    {
+        id: 'ORD-004',
+        customerName: 'Ζαχαροπλαστείο "Ο Γλυκός Πειρασμός"',
+        date: yesterday.toISOString(),
+        items: [
+            { productId: 'p2', quantity: 20 },
+        ],
+        status: 'Ολοκληρωμένη',
+    },
+];
+
 
 export const wholesalerStock: WholesalerStockItem[] = [
     { productId: 'p1', quantity: 150, idealStock: 100 },

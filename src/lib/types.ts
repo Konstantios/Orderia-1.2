@@ -35,10 +35,12 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  customerName: string;
   date: string;
   items: OrderItem[];
   status: 'Εκκρεμής' | 'Ολοκληρωμένη' | 'Απεσταλμένη';
   notes?: string;
+  supplierNotes?: string;
 }
 
 export interface WholesalerStockItem {
