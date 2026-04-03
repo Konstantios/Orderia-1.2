@@ -146,75 +146,76 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        {isCameraOpen ? (
-          <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center animate-in fade-in-0">
-             <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
-             <canvas ref={canvasRef} className="hidden" />
-              {cameraMode === 'barcode' && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-11/12 max-w-sm aspect-[4/3] rounded-2xl border-4 border-dashed border-white/50 relative overflow-hidden">
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-red-500/70 shadow-[0_0_10px_2px_theme(colors.red.500)] animate-scan-line"></div>
-                    </div>
-                </div>
-              )}
-             <Button onClick={() => setIsCameraOpen(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-10 bg-black/50 rounded-full h-10 w-10">
-                <X className="h-6 w-6" />
-             </Button>
-             {cameraMode === 'photo' && (
-                <Button onClick={takePhoto} size="lg" className="absolute bottom-10 z-10">
-                    <Camera className="mr-2 h-5 w-5" />
-                    Λήψη Φωτογραφίας
+    <>
+      <Dialog open={open && !isCameraOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Προσθήκη Νέου Προϊόντος</DialogTitle>
+            <DialogDescription>
+              Φωτογραφίστε το προϊόν, σκανάρετε το barcode, και συμπληρώστε τα στοιχεία.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Φωτογραφία Προϊόντος</Label>
+              <div className="flex items-center gap-4">
+                {photo ? (
+                  <Image src={photo} alt="Product preview" width={80} height={80} className="rounded-md object-cover" />
+                ) : (
+                  <div className="w-20 h-20 bg-muted rounded-md flex items-center justify-center">
+                    <Camera className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+                <Button variant="outline" onClick={() => openCamera('photo')}>
+                  <Camera className="mr-2 h-4 w-4" />Λήψη
                 </Button>
-             )}
-          </div>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Προσθήκη Νέου Προϊόντος</DialogTitle>
-              <DialogDescription>
-                Φωτογραφίστε το προϊόν, σκανάρετε το barcode, και συμπληρώστε τα στοιχεία.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Φωτογραφία Προϊόντος</Label>
-                <div className="flex items-center gap-4">
-                  {photo ? (
-                    <Image src={photo} alt="Product preview" width={80} height={80} className="rounded-md object-cover" />
-                  ) : (
-                    <div className="w-20 h-20 bg-muted rounded-md flex items-center justify-center">
-                      <Camera className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <Button variant="outline" onClick={() => openCamera('photo')}>
-                    <Camera className="mr-2 h-4 w-4" />Λήψη
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="product-name">Τίτλος</Label>
-                <Input id="product-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="π.χ. Κατεψυγμένη Πίτσα" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="product-code">Κωδικός / Barcode</Label>
-                <div className="flex gap-2">
-                  <Input id="product-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Σκανάρετε ή πληκτρολογήστε" />
-                  <Button variant="outline" size="icon" onClick={() => openCamera('barcode')}>
-                    <ScanLine className="h-5 w-5" />
-                  </Button>
-                </div>
               </div>
             </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="secondary">Ακύρωση</Button></DialogClose>
-              <Button onClick={handleSave}><Save className="mr-2 h-4 w-4" />Αποθήκευση</Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            <div className="space-y-2">
+              <Label htmlFor="product-name">Τίτλος</Label>
+              <Input id="product-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="π.χ. Κατεψυγμένη Πίτσα" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="product-code">Κωδικός / Barcode</Label>
+              <div className="flex gap-2">
+                <Input id="product-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Σκανάρετε ή πληκτρολογήστε" />
+                <Button variant="outline" size="icon" onClick={() => openCamera('barcode')}>
+                  <ScanLine className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="secondary">Ακύρωση</Button></DialogClose>
+            <Button onClick={handleSave}><Save className="mr-2 h-4 w-4" />Αποθήκευση</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isCameraOpen && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center animate-in fade-in-0">
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
+          <canvas ref={canvasRef} className="hidden" />
+          
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-11/12 max-w-sm aspect-[4/3] rounded-2xl border-4 border-dashed border-white/50 relative overflow-hidden">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-red-500/70 shadow-[0_0_10px_2px_theme(colors.red.500)] animate-scan-line"></div>
+              </div>
+          </div>
+
+          <Button onClick={() => setIsCameraOpen(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-10 bg-black/50 rounded-full h-10 w-10">
+            <X className="h-6 w-6" />
+          </Button>
+          
+          {cameraMode === 'photo' && (
+             <Button onClick={takePhoto} size="lg" className="absolute bottom-10 z-10">
+                 <Camera className="mr-2 h-5 w-5" />
+                 Λήψη Φωτογραφίας
+             </Button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
