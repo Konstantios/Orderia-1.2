@@ -25,6 +25,21 @@ declare global {
   }
 }
 
+const getStockColor = (current: number, ideal: number) => {
+    if (ideal === 0) return 'bg-muted/30';
+    const ratio = current / ideal;
+    if (ratio > 5 / 6) {
+      return 'bg-green-400/20 text-green-700 dark:text-green-400';
+    }
+    if (ratio <= 1 / 3) {
+      return 'bg-destructive/20 text-destructive';
+    }
+    if (ratio <= 1 / 2) {
+      return 'bg-yellow-400/20 text-yellow-700 dark:text-yellow-400';
+    }
+    return 'bg-muted/30';
+};
+
 const playBeep = () => {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (!context) return;
@@ -64,7 +79,8 @@ export function AdminWarehouseExit({ products, stock, onSync }: { products: Prod
   const inventoryData = useMemo(() => products.map(p => {
     const stockItem = stock.find(i => i.productId === p.id);
     const currentStock = stockItem?.quantity || 0;
-    return { product: p, currentStock };
+    const idealStock = stockItem?.idealStock || 0;
+    return { product: p, currentStock, idealStock };
   }), [products, stock]);
 
   const handleConfirmScan = () => {
@@ -235,21 +251,26 @@ export function AdminWarehouseExit({ products, stock, onSync }: { products: Prod
       <div className="space-y-3">
         {inventoryData
           .filter(({ product }) => (scannedItems[product.id] || 0) > 0)
-          .map(({ product, currentStock }) => {
+          .map(({ product, currentStock, idealStock }) => {
           const scannedCount = scannedItems[product.id] || 0;
           return (
           <Card key={product.id} id={`exit-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", scannedCount > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
             <div className={cn("p-3")}>
+              {currentStock <= idealStock / 3 && idealStock > 0 && <p className="text-xs font-bold uppercase text-destructive mb-1">Κρίσιμη Έλλειψη</p>}
               <p className="text-xs text-muted-foreground">SKU: {product.code}</p>
               <h4 className="font-semibold">{product.name}</h4>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-accent/20 p-2">
                   <p className="text-[11px] font-semibold uppercase text-accent/80">ΕΞΟΔΟΣ</p>
                   <p className="text-2xl font-bold text-accent">{scannedCount}</p>
                 </div>
-                <div className="rounded-lg bg-muted/30 p-2">
-                  <p className="text-[11px] font-semibold uppercase text-muted-foreground">ΑΠΟΘΕΜΑ</p>
+                <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
+                  <p className="text-[11px] font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
                   <p className="text-2xl font-bold">{currentStock}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-2">
+                    <p className="text-[11px] font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
+                    <p className="text-2xl font-bold">{idealStock}</p>
                 </div>
               </div>
             </div>

@@ -80,12 +80,12 @@ export const orderHistory: Order[] = [
 ];
 
 export const wholesalerStock: WholesalerStockItem[] = [
-    { productId: 'p1', quantity: 150 },
-    { productId: 'p2', quantity: 200 },
-    { productId: 'p3', quantity: 80 },
-    { productId: 'p4', quantity: 120 },
-    { productId: 'p5', quantity: 180 },
-    { productId: 'p6', quantity: 250 },
+    { productId: 'p1', quantity: 150, idealStock: 100 },
+    { productId: 'p2', quantity: 200, idealStock: 150 },
+    { productId: 'p3', quantity: 80, idealStock: 100 },
+    { productId: 'p4', quantity: 120, idealStock: 100 },
+    { productId: 'p5', quantity: 180, idealStock: 150 },
+    { productId: 'p6', quantity: 250, idealStock: 200 },
 ];
 
 export const adminDashboardData: AdminDashboardData = {

@@ -44,6 +44,11 @@ export interface Order {
 export interface WholesalerStockItem {
   productId: string;
   quantity: number;
+  idealStock: number;
+  lastAction?: {
+    type: 'είσοδος' | 'έξοδος' | 'καταμέτρηση';
+    value: number;
+  };
 }
 
 export interface AdminDashboardData {
