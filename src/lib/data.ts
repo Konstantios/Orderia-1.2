@@ -50,11 +50,11 @@ export const customers: Customer[] = [
 
 // Updated inventory to match the screenshot
 export const customerInventory: CustomerInventoryItem[] = [
-  { productId: 'p1', currentStock: 5 },   // Pizza
-  { productId: 'p2', currentStock: 12 },  // Croissant
-  { productId: 'p3', currentStock: 38 },  // Bougatsa
+  { productId: 'p1', currentStock: 5, lastAction: { type: 'καταμέτρηση', value: 5 } },   // Pizza
+  { productId: 'p2', currentStock: 12, lastAction: { type: 'είσοδος', value: 10 } },  // Croissant
+  { productId: 'p3', currentStock: 38, lastAction: { type: 'έξοδος', value: 2 } },  // Bougatsa
   { productId: 'p4', currentStock: 18 },  // Kourou
-  { productId: 'p5', currentStock: 5 },   // Spanakopita, keep for other pages
+  { productId: 'p5', currentStock: 5, lastAction: { type: 'καταμέτρηση', value: 5 } },   // Spanakopita, keep for other pages
 ];
 
 export const orderHistory: Order[] = [

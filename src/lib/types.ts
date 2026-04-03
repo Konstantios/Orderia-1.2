@@ -22,6 +22,10 @@ export interface Customer {
 export interface CustomerInventoryItem {
   productId: string;
   currentStock: number;
+  lastAction?: {
+    type: 'είσοδος' | 'έξοδος' | 'καταμέτρηση';
+    value: number;
+  };
 }
 
 export interface OrderItem {

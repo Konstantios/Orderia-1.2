@@ -10,6 +10,7 @@ import { Star } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
+import { Separator } from '@/components/ui/separator';
 
 
 const supplier = customers[0];
@@ -19,9 +20,11 @@ const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => c
 const getProductData = (productId: string) => {
     const product = inventoryProducts.find(p => p.id === productId)!;
     const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
-    const currentStock = initialInventory.find(i => i.productId === productId)?.currentStock || 0;
+    const inventoryItem = initialInventory.find(i => i.productId === productId);
+    const currentStock = inventoryItem?.currentStock || 0;
+    const lastAction = inventoryItem?.lastAction;
     const suggestion = Math.max(0, idealStock - currentStock);
-    return { product, idealStock, currentStock, suggestion };
+    return { product, idealStock, currentStock, suggestion, lastAction };
 };
 
 const getStockColor = (current: number, ideal: number) => {
@@ -45,7 +48,7 @@ export default function InventoryPage() {
             <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
             <Tabs defaultValue="stock" className="w-full">
                 <div className="flex justify-center">
-                    <TabsList>
+                    <TabsList className="flex-wrap h-auto">
                         <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
                         <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
                         <TabsTrigger value="in" disabled>Είσοδος</TabsTrigger>
@@ -76,8 +79,15 @@ export default function InventoryPage() {
                                     <div className="space-y-4 pt-4">
                                         <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Λιστα προϊοντων</h2>
                                         {inventoryProducts.map(({ id }) => {
-                                            const { product, idealStock, currentStock, suggestion } = getProductData(id);
+                                            const { product, idealStock, currentStock, suggestion, lastAction } = getProductData(id);
                                             if (!product) return null;
+
+                                            const lastActionInfo = lastAction ? {
+                                                'είσοδος': { text: 'Είσοδος', color: 'text-green-500' },
+                                                'έξοδος': { text: 'Έξοδος', color: 'text-destructive' },
+                                                'καταμέτρηση': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
+                                            }[lastAction.type] : null;
+
                                             return (
                                                 <Card key={id} className="overflow-hidden bg-card">
                                                     <CardContent className="p-4">
@@ -102,6 +112,15 @@ export default function InventoryPage() {
                                                                 <p className="text-2xl font-bold text-accent">+{suggestion}</p>
                                                             </div>
                                                         </div>
+                                                        {lastAction && lastActionInfo && (
+                                                            <>
+                                                                <Separator className="my-3" />
+                                                                <div className={cn("flex items-center justify-center gap-2 text-xs font-medium", lastActionInfo.color)}>
+                                                                    <span>Προηγ. ενέργεια:</span>
+                                                                    <span className="font-bold">{lastActionInfo.text} {lastAction.value}</span>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </CardContent>
                                                 </Card>
                                             );
