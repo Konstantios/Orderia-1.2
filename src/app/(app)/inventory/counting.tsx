@@ -1,18 +1,19 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Camera, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Product, Customer } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-// Define BarcodeDetector for TypeScript, as it's still experimental
+// Define BarcodeDetector for TypeScript
 interface BarcodeDetector {
   new(options?: { formats: string[] }): BarcodeDetector;
   detect(image: ImageBitmapSource): Promise<{ rawValue: string }[]>;
@@ -25,7 +26,7 @@ declare global {
   }
 }
 
-// Replicating color logic from inventory/page.tsx as requested
+// Replicating color logic from inventory/page.tsx
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/30';
     const ratio = current / ideal;
@@ -41,13 +42,38 @@ const getStockColor = (current: number, ideal: number) => {
     return 'bg-muted/30';
 };
 
+const playBeep = () => {
+    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!context) return;
+    try {
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(600, context.currentTime);
+        gainNode.gain.setValueAtTime(0.5, context.currentTime);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.15);
+    } catch(e) {
+        console.error("Could not play beep", e)
+    }
+};
+
 export function InventoryCounting({ products, customer }: { products: Product[]; customer: Customer }) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null); // For highlight
   const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
+  
+  const [productForConfirmation, setProductForConfirmation] = useState<Product | null>(null);
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
-  // Mock inventory data for display. In a real app, this would be managed state.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const detectionIntervalRef = useRef<NodeJS.Timeout>();
+  const { toast } = useToast();
+  const warehouseBg = PlaceHolderImages.find(img => img.id === 'warehouse-background');
+
   const inventoryData = customer.products.map(cp => {
     const product = products.find(p => p.id === cp.productId)!;
     const idealStock = cp.idealStock;
@@ -55,34 +81,40 @@ export function InventoryCounting({ products, customer }: { products: Product[];
     return { product, idealStock, currentStock };
   });
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const { toast } = useToast();
-  const warehouseBg = PlaceHolderImages.find(img => img.id === 'warehouse-background');
+  const handleConfirmScan = () => {
+    if (!productForConfirmation) return;
+    
+    const product = productForConfirmation;
 
-  const handleScanSuccess = useCallback((scannedCode: string) => {
-    const product = products.find(p => p.code === scannedCode);
-    if (product) {
-      setScannedProduct(product);
-      setScannedItems(prev => ({
-        ...prev,
-        [product.id]: (prev[product.id] || 0) + 1,
-      }));
-      toast({ title: "Επιτυχής Σάρωση!", description: `Προστέθηκε: ${product.name}` });
+    setScannedItems(prev => ({
+      ...prev,
+      [product.id]: (prev[product.id] || 0) + 1,
+    }));
 
-      const element = document.getElementById(`counting-product-${product.id}`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    toast({ title: "Επιτυχής Καταμέτρηση!", description: `Προστέθηκε: ${product.name}` });
 
-      setTimeout(() => setScannedProduct(null), 2000);
-    } else {
-      toast({ variant: "destructive", title: "Άγνωστος Κωδικός", description: `Το προϊόν με κωδικό ${scannedCode} δεν βρέθηκε.` });
-    }
-  }, [products, toast]);
+    const element = document.getElementById(`counting-product-${product.id}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
+    setScannedProduct(product); // For highlight effect
+    setTimeout(() => setScannedProduct(null), 2000);
+
+    setProductForConfirmation(null);
+    setLastScannedCode(null); // Allow scanning again
+  };
+
+  const handleCancelScan = () => {
+    setProductForConfirmation(null);
+    setLastScannedCode(null); // Allow scanning again
+  };
+  
   useEffect(() => {
-    if (!isScanning) return;
+    if (!isScanning) {
+        if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+        return;
+    }
 
     let stream: MediaStream | null = null;
-    let detectionInterval: ReturnType<typeof setInterval>;
     
     const startScan = async () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -107,21 +139,33 @@ export function InventoryCounting({ products, customer }: { products: Product[];
           const barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
           
           let isDetecting = false;
-          detectionInterval = setInterval(async () => {
-            if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && !isDetecting) {
-              try {
-                isDetecting = true;
-                const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue) {
-                  handleScanSuccess(barcodes[0].rawValue);
-                }
-              } catch (e) {
-                // Barcode detection can fail on some frames, no need to log.
-              } finally {
-                  isDetecting = false;
-              }
+          detectionIntervalRef.current = setInterval(async () => {
+            if (productForConfirmation || !videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA || isDetecting) {
+              return;
             }
-          }, 300);
+            try {
+              isDetecting = true;
+              const barcodes = await barcodeDetector.detect(videoRef.current);
+              if (barcodes.length > 0 && barcodes[0].rawValue) {
+                const newScannedCode = barcodes[0].rawValue;
+                if (newScannedCode !== lastScannedCode) {
+                    setLastScannedCode(newScannedCode); // Prevent immediate re-scan of the same code
+                    playBeep();
+                    const product = products.find(p => p.code === newScannedCode);
+                    if (product) {
+                        setProductForConfirmation(product);
+                    } else {
+                        toast({ variant: "destructive", title: "Άγνωστος Κωδικός", description: `Το προϊόν με κωδικό ${newScannedCode} δεν βρέθηκε.` });
+                        setTimeout(() => setLastScannedCode(null), 2000); // Allow retry after 2s
+                    }
+                }
+              }
+            } catch (e) {
+                // Barcode detection can fail on some frames, no need to log.
+            } finally {
+                isDetecting = false;
+            }
+          }, 500); // Slightly longer interval
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
@@ -138,14 +182,14 @@ export function InventoryCounting({ products, customer }: { products: Product[];
     startScan();
 
     return () => {
-      if (detectionInterval) clearInterval(detectionInterval);
+      if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
       if (videoRef.current && videoRef.current.srcObject) {
         const currentStream = videoRef.current.srcObject as MediaStream;
         currentStream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
       }
     };
-  }, [isScanning, toast, handleScanSuccess]);
+  }, [isScanning, products, toast, productForConfirmation, lastScannedCode]);
   
   const totalScannedProducts = Object.keys(scannedItems).length;
 
@@ -226,6 +270,39 @@ export function InventoryCounting({ products, customer }: { products: Product[];
           </Card>
         )})}
       </div>
+      
+      <Dialog open={!!productForConfirmation} onOpenChange={(open) => !open && handleCancelScan()}>
+        <DialogContent>
+            {productForConfirmation && (
+            <>
+                <DialogHeader>
+                    <DialogTitle>Επιβεβαίωση Σάρωσης</DialogTitle>
+                    <DialogDescription>
+                        Το προϊόν βρέθηκε. Πατήστε "Επιβεβαίωση" για να αυξήσετε την καταμέτρηση.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex items-center gap-4 my-4 p-4 bg-muted/50 rounded-lg">
+                    <Image 
+                        src={productForConfirmation.imageUrl} 
+                        alt={productForConfirmation.name} 
+                        width={64} 
+                        height={64} 
+                        className="rounded-md object-cover"
+                        data-ai-hint={productForConfirmation.imageHint}
+                    />
+                    <div>
+                        <h3 className="font-semibold">{productForConfirmation.name}</h3>
+                        <p className="text-sm text-muted-foreground">Κωδικός: {productForConfirmation.code}</p>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={handleCancelScan}>Ακύρωση</Button>
+                    <Button onClick={handleConfirmScan}>Επιβεβαίωση</Button>
+                </DialogFooter>
+            </>
+            )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
