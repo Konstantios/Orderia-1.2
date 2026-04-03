@@ -1,7 +1,11 @@
+'use client';
+
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Icons } from '@/components/icons';
 import { Bell, History, Package, ShoppingCart } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRouter } from 'next/navigation';
 
 const menuItems = [
   {
@@ -42,8 +46,25 @@ const menuItems = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+
+  const handleRoleChange = (role: string) => {
+    if (role === 'supplier') {
+      router.push('/admin/dashboard');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8">
+      <div className="flex justify-center">
+        <Tabs defaultValue="store" onValueChange={handleRoleChange} className="w-full max-w-sm">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="store">Κατάστημα</TabsTrigger>
+                <TabsTrigger value="supplier">Προμηθευτής</TabsTrigger>
+            </TabsList>
+        </Tabs>
+      </div>
+
       <h1 className="font-headline text-3xl font-bold">Καλώς ήρθες, Φούρνος "Η Γεύση"</h1>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {menuItems.map((item) => (
