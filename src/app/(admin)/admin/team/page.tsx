@@ -34,20 +34,26 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-const teamMembers = [
-    { name: 'Νίκος Παπαδόπουλος', email: 'admin@frozenfoods.gr', role: 'Διαχειριστής' },
-    { name: 'Μαρία Γεωργίου', email: 'maria@frozenfoods.gr', role: 'Αποθηκάριος' },
-    { name: 'Γιάννης Αντωνίου', email: 'giannis@frozenfoods.gr', role: 'Πωλητής' },
+const teamMembersData = [
+    { id: '1', name: 'Νίκος Παπαδόπουλος', email: 'admin@frozenfoods.gr', role: 'Διαχειριστής' },
+    { id: '2', name: 'Μαρία Γεωργίου', email: 'maria@frozenfoods.gr', role: 'Αποθηκάριος' },
+    { id: '3', name: 'Γιάννης Αντωνίου', email: 'giannis@frozenfoods.gr', role: 'Πωλητής' },
+]
+
+const pendingRequestsData = [
+    { id: 'req1', name: 'Γιώργος Παπαδάκης', email: 'g.papadakis@email.com' },
+    { id: 'req2', name: 'Ελένη Ιωάννου', email: 'e.ioannou@email.com' },
 ]
 
 export default function AdminTeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+    const [pendingRequests, setPendingRequests] = useState(pendingRequestsData);
 
     const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -56,78 +62,129 @@ export default function AdminTeamPage() {
         const name = formData.get('name') as string;
         const role = formData.get('role') as string;
 
-        // In a real app, you would send an invitation email here.
-        // For now, we just show a toast.
         toast({
             title: "Η πρόσκληση στάλθηκε!",
             description: `Ο χρήστης ${name} (${email}) έχει προσκληθεί ως ${role}.`,
         });
 
         setIsInviteDialogOpen(false); // Close the dialog
+    };
+
+    const handleRequest = (requestId: string, accepted: boolean) => {
+        const request = pendingRequests.find(r => r.id === requestId);
+        if (!request) return;
+
+        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+
+        if(accepted) {
+             toast({
+                title: "Το Αίτημα Εγκρίθηκε",
+                description: `Ο χρήστης ${request.name} έχει προστεθεί στην ομάδα.`,
+            });
+            // In a real app, you would add the user to the team here.
+        } else {
+            toast({
+                variant: 'destructive',
+                title: "Το Αίτημα Απορρίφθηκε",
+                description: `Το αίτημα του χρήστη ${request.name} έχει απορριφθεί.`,
+            });
+        }
     }
 
 
     return (
         <div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-6">
                 <h1 className="text-lg font-semibold md:text-2xl">Διαχείριση Ομάδας</h1>
-                <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Πρόσκληση Μέλους
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                         <form onSubmit={handleInvite}>
-                            <DialogHeader>
-                                <DialogTitle>Πρόσκληση Νέου Μέλους</DialogTitle>
-                                <DialogDescription>
-                                    Συμπληρώστε τα στοιχεία του νέου μέλους για να του στείλετε μια πρόσκληση.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="name" className="text-right">
-                                        Όνομα
-                                    </Label>
-                                    <Input id="name" name="name" required className="col-span-3" />
+            </div>
+
+            {pendingRequests.length > 0 && (
+                 <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>Εκκρεμή Αιτήματα</CardTitle>
+                        <CardDescription>
+                            Εγκρίνετε ή απορρίψτε τα αιτήματα χρηστών για συμμετοχή στην ομάδα σας.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {pendingRequests.map((request) => (
+                            <div key={request.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                <div>
+                                    <p className="font-semibold">{request.name}</p>
+                                    <p className="text-sm text-muted-foreground">{request.email}</p>
                                 </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="email" className="text-right">
-                                        Email
-                                    </Label>
-                                    <Input id="email" name="email" type="email" required className="col-span-3" />
-                                </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="role" className="text-right">
-                                        Ρόλος
-                                    </Label>
-                                    <Select name="role" required defaultValue="Πωλητής">
-                                        <SelectTrigger className="col-span-3">
-                                            <SelectValue placeholder="Επιλέξτε ρόλο" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Διαχειριστής">Διαχειριστής</SelectItem>
-                                            <SelectItem value="Αποθηκάριος">Αποθηκάριος</SelectItem>
-                                            <SelectItem value="Πωλητής">Πωλητής</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRequest(request.id, false)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="outline" size="icon" className="text-green-500 hover:text-green-500" onClick={() => handleRequest(request.id, true)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
-                            <DialogFooter>
-                                <Button type="submit">Αποστολή Πρόσκλησης</Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
-                <CardHeader>
-                    <CardTitle>Μέλη Ομάδας</CardTitle>
-                    <CardDescription>
-                        Προσκαλέστε και διαχειριστείτε τα μέλη της ομάδας που έχουν πρόσβαση στο σύστημα.
-                    </CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Μέλη Ομάδας</CardTitle>
+                        <CardDescription>
+                            Προσκαλέστε και διαχειριστείτε τα μέλη της ομάδας που έχουν πρόσβαση στο σύστημα.
+                        </CardDescription>
+                    </div>
+                     <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Πρόσκληση Μέλους
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <form onSubmit={handleInvite}>
+                                <DialogHeader>
+                                    <DialogTitle>Πρόσκληση Νέου Μέλους</DialogTitle>
+                                    <DialogDescription>
+                                        Συμπληρώστε τα στοιχεία του νέου μέλους για να του στείλετε μια πρόσκληση.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="name" className="text-right">
+                                            Όνομα
+                                        </Label>
+                                        <Input id="name" name="name" required className="col-span-3" />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="email" className="text-right">
+                                            Email
+                                        </Label>
+                                        <Input id="email" name="email" type="email" required className="col-span-3" />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="role" className="text-right">
+                                            Ρόλος
+                                        </Label>
+                                        <Select name="role" required defaultValue="Πωλητής">
+                                            <SelectTrigger className="col-span-3">
+                                                <SelectValue placeholder="Επιλέξτε ρόλο" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Διαχειριστής">Διαχειριστής</SelectItem>
+                                                <SelectItem value="Αποθηκάριος">Αποθηκάριος</SelectItem>
+                                                <SelectItem value="Πωλητής">Πωλητής</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button type="submit">Αποστολή Πρόσκλησης</Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
                 </CardHeader>
                 <CardContent>
                    <Table>
@@ -140,7 +197,7 @@ export default function AdminTeamPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teamMembers.map((member) => (
+                            {teamMembersData.map((member) => (
                                 <TableRow key={member.email}>
                                     <TableCell className="font-medium">{member.name}</TableCell>
                                     <TableCell className="text-muted-foreground">{member.email}</TableCell>
