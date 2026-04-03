@@ -1,4 +1,4 @@
-import type { Product, Customer, Order, CustomerInventoryItem, WholesalerStockItem, AdminDashboardData, Notification } from './types';
+import type { Product, Customer, Order, CustomerInventoryItem, WholesalerStockItem, AdminDashboardData, Notification, AdminCustomer } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 function getImage(id: string) {
@@ -46,6 +46,40 @@ export const customers: Customer[] = [
       { productId: 'p2', idealStock: 20 },
     ],
   },
+];
+
+export const adminCustomers: AdminCustomer[] = [
+  {
+    id: 'cust-1',
+    companyName: 'Φούρνος "Η Γεύση"',
+    vatNumber: '123456789',
+    phone1: '2101234567',
+    address: 'Αριστοτέλους 1, 10432, Αθήνα',
+    googleMapsLink: 'https://maps.app.goo.gl/12345',
+    deliveryDay: 'Τρίτη',
+    contactName: 'Νίκος Γεωργίου'
+  },
+  {
+    id: 'cust-2',
+    companyName: 'Snack Bar "Το Γρήγορο"',
+    vatNumber: '987654321',
+    phone1: '2109876543',
+    phone2: '6971234567',
+    address: 'Πατησίων 100, 11257, Αθήνα',
+    googleMapsLink: 'https://maps.app.goo.gl/67890',
+    deliveryDay: 'Δευτέρα',
+    contactName: 'Μαρία Παπαδάκη'
+  },
+  {
+    id: 'cust-3',
+    companyName: 'Ζαχαροπλαστείο "Ο Γλυκός Πειρασμός"',
+    vatNumber: '112233445',
+    phone1: '2105555555',
+    address: 'Πλατεία Συντάγματος 5, 10563, Αθήνα',
+    googleMapsLink: 'https://maps.app.goo.gl/abcde',
+    deliveryDay: 'Πέμπτη',
+    contactName: 'Ελένη Κώστα'
+  }
 ];
 
 // Updated inventory to match the screenshot

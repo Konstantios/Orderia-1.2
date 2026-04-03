@@ -19,6 +19,18 @@ export interface Customer {
   products: CustomerProduct[];
 }
 
+export interface AdminCustomer {
+  id: string;
+  companyName: string;
+  vatNumber: string;
+  phone1: string;
+  phone2?: string;
+  address: string;
+  googleMapsLink?: string;
+  deliveryDay: string;
+  contactName: string;
+}
+
 export interface CustomerInventoryItem {
   productId: string;
   currentStock: number;
