@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { adminOrders } from "@/lib/data";
+import { adminOrders, products } from "@/lib/data";
 import type { Order } from "@/lib/types";
 import { Download, History } from "lucide-react";
 import { isToday, isYesterday } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from 'xlsx';
 
 
 export default function AdminOrdersPage() {
@@ -21,13 +22,62 @@ export default function AdminOrdersPage() {
     const todaysOrders = orders.filter(o => isToday(new Date(o.date)));
     const yesterdaysOrders = orders.filter(o => isYesterday(new Date(o.date)));
 
-    // Note: Excel export for all orders is not implemented in this step.
     const handleExportAll = () => {
-        toast({
-            variant: "destructive",
-            title: "Λειτουργία υπό κατασκευή",
-            description: "Η εξαγωγή όλων των παραγγελιών δεν είναι ακόμα διαθέσιμη.",
+        const ordersToExport = orders; 
+
+        if (ordersToExport.length === 0) {
+            toast({
+                title: "Δεν υπάρχουν παραγγελίες",
+                description: "Δεν βρέθηκαν παραγγελίες για εξαγωγή.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const exportData = ordersToExport.flatMap(order => {
+            const commonData = {
+                'ID Παραγγελίας': order.id,
+                'Πελάτης': order.customerName,
+                'Ημερομηνία Παραγγελίας': new Date(order.date).toLocaleString('el-GR'),
+                'Κατάσταση': order.status,
+                'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder
+                'Σημειώσεις Πελάτη': order.notes || '-',
+            };
+
+            if (order.items.length === 0) {
+                return [{
+                    ...commonData,
+                    'Κωδικός Προϊόντος': '-',
+                    'Προϊόν': '-',
+                    'Ποσότητα': 0,
+                    'Μονάδα': '-',
+                }];
+            }
+            return order.items.map(item => {
+                const product = products.find(p => p.id === item.productId);
+                return {
+                    ...commonData,
+                    'Κωδικός Προϊόντος': product?.code || '-',
+                    'Προϊόν': product?.name || 'Άγνωστο',
+                    'Ποσότητα': item.quantity,
+                    'Μονάδα': product?.unit || '-',
+                };
+            });
         });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, `Παραγγελίες`);
+
+        const colWidths = Object.keys(exportData[0] || {}).map(key => ({
+            wch: Math.max(
+                key.length,
+                ...exportData.map(row => (String((row as any)[key]) || '').length)
+            ) + 2
+        }));
+        worksheet['!cols'] = colWidths;
+
+        XLSX.writeFile(workbook, `Συνολικές_Παραγγελίες.xlsx`);
     };
 
     const renderOrderList = (orderList: Order[]) => {
