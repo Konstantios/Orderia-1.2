@@ -25,6 +25,7 @@ const navItems = [
   { href: '/admin/customers', label: 'Πελάτες', icon: Icons.customers },
   { href: '/admin/warehouse', label: 'Αποθήκη', icon: Icons.warehouse },
   { href: '/admin/reports', label: 'Αναφορές', icon: Icons.reports },
+  { href: '/admin/team', label: 'Ομάδα', icon: Icons.team },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -71,7 +72,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Αποσύνδεση">
-                            <Link href="/">
+                            <Link href="/page.tsx">
                                 <LogOut />
                                 <span>Αποσύνδεση</span>
                             </Link>

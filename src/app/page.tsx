@@ -22,8 +22,7 @@ export default function LoginPage() {
   const [storePassword, setStorePassword] = useState('g1');
 
   // State for supplier login
-  const [supplierName, setSupplierName] = useState('frozen foods');
-  const [supplierAfm, setSupplierAfm] = useState('111');
+  const [supplierEmail, setSupplierEmail] = useState('admin@frozenfoods.gr');
   const [supplierPassword, setSupplierPassword] = useState('fr1');
 
 
@@ -40,7 +39,7 @@ export default function LoginPage() {
         });
       }
     } else if (role === 'supplier') {
-      if (supplierName === 'frozen foods' && supplierAfm === '111' && supplierPassword === 'fr1') {
+      if (supplierEmail === 'admin@frozenfoods.gr' && supplierPassword === 'fr1') {
         router.push('/admin/dashboard');
       } else {
         toast({
@@ -72,12 +71,8 @@ export default function LoginPage() {
   const SupplierForm = (
      <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="supplier-name">Όνομα Προμηθευτή</Label>
-            <Input id="supplier-name" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} required placeholder="π.χ. Frozen Foods"/>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="supplier-afm">ΑΦΜ</Label>
-            <Input id="supplier-afm" value={supplierAfm} onChange={(e) => setSupplierAfm(e.target.value)} required placeholder="π.χ. 111" />
+            <Label htmlFor="supplier-email">Email</Label>
+            <Input id="supplier-email" type="email" value={supplierEmail} onChange={(e) => setSupplierEmail(e.target.value)} required placeholder="π.χ. user@company.com"/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="supplier-password">Κωδικός</Label>

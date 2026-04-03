@@ -27,6 +27,7 @@ export const Icons = {
   plus: Plus,
   minus: Minus,
   suppliers: Truck,
+  team: Users,
 };
 
 export type Icon = keyof typeof Icons;
