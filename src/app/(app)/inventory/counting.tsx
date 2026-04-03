@@ -1,15 +1,14 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Camera, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Product, Customer } from '@/lib/types';
+import type { Product, Customer, CustomerInventoryItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
@@ -60,7 +59,7 @@ const playBeep = () => {
     }
 };
 
-export function InventoryCounting({ products, customer }: { products: Product[]; customer: Customer }) {
+export function InventoryCounting({ products, customer, inventory, onSync }: { products: Product[]; customer: Customer; inventory: CustomerInventoryItem[], onSync: (scannedItems: Record<string, number>) => void }) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null); // For highlight
@@ -74,12 +73,17 @@ export function InventoryCounting({ products, customer }: { products: Product[];
   const { toast } = useToast();
   const warehouseBg = PlaceHolderImages.find(img => img.id === 'warehouse-background');
 
-  const inventoryData = customer.products.map(cp => {
+  const handleSync = () => {
+    onSync(scannedItems);
+    setScannedItems({});
+  };
+
+  const inventoryData = useMemo(() => customer.products.map(cp => {
     const product = products.find(p => p.id === cp.productId)!;
     const idealStock = cp.idealStock;
-    const currentStock = Math.floor(Math.random() * (idealStock + 5)); // Random stock for demo
+    const currentStock = inventory.find(i => i.productId === cp.productId)?.currentStock || 0;
     return { product, idealStock, currentStock };
-  });
+  }), [customer.products, products, inventory]);
 
   const handleConfirmScan = () => {
     if (!productForConfirmation) return;
@@ -96,7 +100,7 @@ export function InventoryCounting({ products, customer }: { products: Product[];
     const element = document.getElementById(`counting-product-${product.id}`);
     element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    setScannedProduct(product); // For highlight effect
+    setScannedProduct(product);
     setTimeout(() => setScannedProduct(null), 2000);
 
     setProductForConfirmation(null);
@@ -235,13 +239,17 @@ export function InventoryCounting({ products, customer }: { products: Product[];
             <p className="text-sm font-medium text-muted-foreground">Σύνολο Σαρωμένων Τεμαχίων</p>
             <p className="text-4xl font-bold">{totalScannedItems}</p>
           </div>
-          <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 self-start">
+          <Button
+            onClick={handleSync}
+            variant="secondary"
+            className="bg-primary/10 text-primary border border-primary/20 self-start h-auto px-2.5 py-0.5 rounded-full font-semibold text-xs hover:bg-primary/20"
+          >
             <span className="relative flex h-2 w-2 mr-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
             Ζωντανός Συγχρονισμός
-          </Badge>
+          </Button>
         </CardContent>
       </Card>
 

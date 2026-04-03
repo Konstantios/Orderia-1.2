@@ -13,6 +13,7 @@ import { InventoryDatabase } from './database';
 import { Separator } from '@/components/ui/separator';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
 
 
 const getStockColor = (current: number, ideal: number) => {
@@ -32,13 +33,46 @@ const getStockColor = (current: number, ideal: number) => {
 
 export default function InventoryPage() {
     const [supplier, setSupplier] = useState(customers[0]);
+    const [inventory, setInventory] = useState(initialInventory);
+    const { toast } = useToast();
     const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
     const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
 
+    const handleInventorySync = (scannedItems: Record<string, number>) => {
+        if (Object.keys(scannedItems).length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Δεν υπάρχουν δεδομένα',
+                description: 'Παρακαλώ σκανάρετε κάποια προϊόντα πρώτα.',
+            });
+            return;
+        }
+
+        setInventory(prevInventory => {
+            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
+
+            for (const [productId, count] of Object.entries(scannedItems)) {
+                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
+                inventoryMap.set(productId, {
+                    ...existingItem,
+                    currentStock: count,
+                    lastAction: { type: 'καταμέτρηση', value: count }
+                });
+            }
+            
+            return Array.from(inventoryMap.values());
+        });
+
+        toast({
+            title: 'Συγχρονισμός Ολοκληρώθηκε!',
+            description: 'Το απόθεμα ενημερώθηκε με τα αποτελέσματα της καταμέτρησης.',
+        });
+    };
+    
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
         const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
-        const inventoryItem = initialInventory.find(i => i.productId === productId);
+        const inventoryItem = inventory.find(i => i.productId === productId);
         const currentStock = inventoryItem?.currentStock || 0;
         const lastAction = inventoryItem?.lastAction;
         const suggestion = Math.max(0, idealStock - currentStock);
@@ -152,7 +186,7 @@ export default function InventoryPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="counting" className="mt-6">
-                    <InventoryCounting products={inventoryProducts} customer={supplier} />
+                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleInventorySync} />
                 </TabsContent>
                 <TabsContent value="database" className="mt-6">
                     <InventoryDatabase products={inventoryProducts} />
