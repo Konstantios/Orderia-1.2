@@ -191,7 +191,7 @@ export function InventoryCounting({ products, customer }: { products: Product[];
     };
   }, [isScanning, products, toast, productForConfirmation, lastScannedCode]);
   
-  const totalScannedProducts = Object.keys(scannedItems).length;
+  const totalScannedItems = Object.values(scannedItems).reduce((sum, count) => sum + count, 0);
 
   return (
     <div className="space-y-4">
@@ -232,7 +232,7 @@ export function InventoryCounting({ products, customer }: { products: Product[];
       <div className="flex justify-between items-center py-2">
         <div>
           <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Αποτελεσματα Καταμετρησης</h4>
-          <p className="text-xs text-muted-foreground">Σύνολο σαρωμένων προϊόντων: {totalScannedProducts}</p>
+          <p className="text-xs text-muted-foreground">Σύνολο σαρωμένων τεμαχίων: {totalScannedItems}</p>
         </div>
         <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
           <span className="relative flex h-2 w-2 mr-2">
