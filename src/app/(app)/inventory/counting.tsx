@@ -254,15 +254,15 @@ export function InventoryCounting({ products, customer }: { products: Product[];
               <h4 className="font-semibold">{product.name}</h4>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg bg-accent/20 p-2">
-                  <p className="text-xs font-semibold uppercase text-accent/80">ΣΚΑΝΑΡΙΣΜΕΝΑ</p>
+                  <p className="text-[11px] font-semibold uppercase text-accent/80">Σκαναρ.</p>
                   <p className="text-2xl font-bold text-accent">{scannedCount}</p>
                 </div>
                 <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
-                  <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
+                  <p className="text-[11px] font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
                   <p className="text-2xl font-bold">{currentStock}</p>
                 </div>
                 <div className="rounded-lg bg-muted/30 p-2">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
+                  <p className="text-[11px] font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
                   <p className="text-2xl font-bold">{idealStock}</p>
                 </div>
               </div>
