@@ -11,21 +11,9 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
 import { Separator } from '@/components/ui/separator';
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
 
-
-const supplier = customers[0];
-const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
-const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
-
-const getProductData = (productId: string) => {
-    const product = inventoryProducts.find(p => p.id === productId)!;
-    const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
-    const inventoryItem = initialInventory.find(i => i.productId === productId);
-    const currentStock = inventoryItem?.currentStock || 0;
-    const lastAction = inventoryItem?.lastAction;
-    const suggestion = Math.max(0, idealStock - currentStock);
-    return { product, idealStock, currentStock, suggestion, lastAction };
-};
 
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/50 border-transparent';
@@ -43,6 +31,32 @@ const getStockColor = (current: number, ideal: number) => {
 };
 
 export default function InventoryPage() {
+    const [supplier, setSupplier] = useState(customers[0]);
+    const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+    const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
+
+    const getProductData = (productId: string) => {
+        const product = inventoryProducts.find(p => p.id === productId)!;
+        const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
+        const inventoryItem = initialInventory.find(i => i.productId === productId);
+        const currentStock = inventoryItem?.currentStock || 0;
+        const lastAction = inventoryItem?.lastAction;
+        const suggestion = Math.max(0, idealStock - currentStock);
+        return { product, idealStock, currentStock, suggestion, lastAction };
+    };
+    
+    const handleIdealStockChange = (productId: string, value: string) => {
+        const newIdealStock = parseInt(value, 10);
+        const stockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
+        
+        setSupplier(prevSupplier => {
+            const updatedProducts = prevSupplier.products.map(p => 
+                p.productId === productId ? { ...p, idealStock: stockValue } : p
+            );
+            return { ...prevSupplier, products: updatedProducts };
+        });
+    };
+
     return (
         <div className="space-y-6">
             <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
@@ -103,9 +117,15 @@ export default function InventoryPage() {
                                                                 <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
                                                                 <p className="text-2xl font-bold">{currentStock}</p>
                                                             </div>
-                                                            <div className="rounded-lg bg-muted/30 p-2">
+                                                            <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
-                                                                <p className="text-2xl font-bold">{idealStock}</p>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={idealStock}
+                                                                    onChange={(e) => handleIdealStockChange(product.id, e.target.value)}
+                                                                    className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                    min="0"
+                                                                />
                                                             </div>
                                                             <div className="rounded-lg bg-muted/30 p-2">
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
