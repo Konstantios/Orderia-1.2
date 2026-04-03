@@ -250,7 +250,9 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
       </Card>
 
       <div className="space-y-3">
-        {inventoryData.map(({ product, currentStock, idealStock }) => {
+        {inventoryData
+          .filter(({ product }) => (scannedItems[product.id] || 0) > 0)
+          .map(({ product, currentStock, idealStock }) => {
           const scannedCount = scannedItems[product.id] || 0;
           return (
           <Card key={product.id} id={`exit-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", scannedCount > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
