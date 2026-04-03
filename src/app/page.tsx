@@ -7,26 +7,84 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Logo } from '@/components/logo';
+import { useState } from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [role, setRole] = useState<'store' | 'supplier'>('store');
+  
+  // State for store login
+  const [storeName, setStoreName] = useState('η γεύση');
+  const [storeAfm, setStoreAfm] = useState('222');
+  const [storePassword, setStorePassword] = useState('g1');
+
+  // State for supplier login
+  const [supplierName, setSupplierName] = useState('frozen foods');
+  const [supplierAfm, setSupplierAfm] = useState('111');
+  const [supplierPassword, setSupplierPassword] = useState('fr1');
+
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login logic
-    router.push('/dashboard');
+    if (role === 'store') {
+      if (storeName === 'η γεύση' && storeAfm === '222' && storePassword === 'g1') {
+        router.push('/dashboard');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Λάθος Στοιχεία Σύνδεσης',
+          description: 'Παρακαλώ ελέγξτε τα στοιχεία για το κατάστημα.',
+        });
+      }
+    } else if (role === 'supplier') {
+      if (supplierName === 'frozen foods' && supplierAfm === '111' && supplierPassword === 'fr1') {
+        router.push('/admin/dashboard');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Λάθος Στοιχεία Σύνδεσης',
+          description: 'Παρακαλώ ελέγξτε τα στοιχεία για τον προμηθευτή.',
+        });
+      }
+    }
   };
 
-  const handleAdminLogin = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Mock admin login logic
-    router.push('/admin/dashboard');
-  };
-
-  const handleSkipForDemo = (e: React.MouseEvent) => {
-    e.preventDefault();
-    router.push('/orders/new');
-  };
+  const StoreForm = (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="store-name">Όνομα Καταστήματος</Label>
+        <Input id="store-name" value={storeName} onChange={(e) => setStoreName(e.target.value)} required placeholder="π.χ. Η Γεύση" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="store-afm">ΑΦΜ</Label>
+        <Input id="store-afm" value={storeAfm} onChange={(e) => setStoreAfm(e.target.value)} required placeholder="π.χ. 222" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="store-password">Κωδικός</Label>
+        <Input id="store-password" type="password" value={storePassword} onChange={(e) => setStorePassword(e.target.value)} required />
+      </div>
+    </div>
+  );
+  
+  const SupplierForm = (
+     <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="supplier-name">Όνομα Προμηθευτή</Label>
+            <Input id="supplier-name" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} required placeholder="π.χ. Frozen Foods"/>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="supplier-afm">ΑΦΜ</Label>
+            <Input id="supplier-afm" value={supplierAfm} onChange={(e) => setSupplierAfm(e.target.value)} required placeholder="π.χ. 111" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="supplier-password">Κωδικός</Label>
+            <Input id="supplier-password" type="password" value={supplierPassword} onChange={(e) => setSupplierPassword(e.target.value)} required />
+          </div>
+      </div>
+  );
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -40,20 +98,17 @@ export default function LoginPage() {
         </p>
       </div>
       <Card className="mt-8 w-full max-w-sm border-2 border-primary/20 bg-card/80 shadow-lg shadow-primary/10">
-        <CardHeader className="text-center">
-          <CardTitle className="font-headline text-2xl">Σύνδεση Πελάτη</CardTitle>
-          <CardDescription>Εισαγάγετε τα στοιχεία σας για πρόσβαση στον πίνακα ελέγχου σας.</CardDescription>
+        <CardHeader>
+            <Tabs defaultValue="store" onValueChange={(value) => setRole(value as 'store' | 'supplier')} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="store">Κατάστημα</TabsTrigger>
+                    <TabsTrigger value="supplier">Προμηθευτής</TabsTrigger>
+                </TabsList>
+            </Tabs>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email / Τηλέφωνο</Label>
-              <Input id="email" type="email" placeholder="m@example.com" defaultValue="demo@bakery.com" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">PIN / Κωδικός</Label>
-              <Input id="password" type="password" defaultValue="demopass" required />
-            </div>
+            {role === 'store' ? StoreForm : SupplierForm}
             <div className="flex items-center space-x-2">
               <Checkbox id="remember-me" />
               <Label htmlFor="remember-me">Να με θυμάσαι</Label>
@@ -62,12 +117,6 @@ export default function LoginPage() {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg h-12">
               Σύνδεση
-            </Button>
-            <Button type="button" variant="outline" onClick={handleAdminLogin} className="w-full">
-              Πρόσβαση Χονδρέμπορου
-            </Button>
-            <Button type="button" variant="link" onClick={handleSkipForDemo} className="w-full">
-              Παράλειψη για δοκιμή
             </Button>
           </CardFooter>
         </form>
