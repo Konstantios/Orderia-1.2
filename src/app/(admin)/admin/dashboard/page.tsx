@@ -11,13 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from "@/lib/utils"
-import { CheckCircle, Clock } from "lucide-react"
-import { useState, useEffect } from "react"
+import { ArrowDown, ArrowUp } from "lucide-react"
 
 const kpis = [
   { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
@@ -26,58 +24,79 @@ const kpis = [
   { title: "Νέοι Πελάτες", value: adminDashboardData.newCustomers, icon: Icons.customers },
 ]
 
-const recentOrders = [
-    { id: 'ORD-001', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-24', status: 'Εκκρεμής', total: '€125.50' },
-    { id: 'ORD-002', customer: 'Snack Bar "Το Γρήγορο"', date: '2023-10-24', status: 'Απεσταλμένη', total: '€88.00' },
-    { id: 'ORD-003', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-23', status: 'Ολοκληρωμένη', total: '€110.20' },
-    { id: 'ORD-004', customer: 'Ζαχαροπλαστείο "Ο Γλυκός Πειρασμός"', date: '2023-10-23', status: 'Ολοκληρωμένη', total: '€215.00' },
-    { id: 'ORD-005', customer: 'Φούρνος "Η Γεύση"', date: '2023-10-22', status: 'Ολοκληρωμένη', total: '€130.80' },
-]
-
-const salesData = [
-  { name: 'Εβδ. 1', 'Παραγγελίες': 40 },
-  { name: 'Εβδ. 2', 'Παραγγελίες': 30 },
-  { name: 'Εβδ. 3', 'Παραγγελίες': 50 },
-  { name: 'Εβδ. 4', 'Παραγγελίες': 45 },
+// New Dummy Data
+const dailySales = [
+  { period: 'Σήμερα', items: 120, change: 15 },
+  { period: 'Χθες', items: 105, change: -20 },
+  { period: 'Προχθές', items: 125, change: 5 },
+  { period: '25/10', items: 120, change: -10 },
+  { period: '24/10', items: 130, change: 30 },
+  { period: '23/10', items: 100, change: -5 },
+  { period: '22/10', items: 105, change: 10 },
 ];
 
-const dailyRoutine = [
-    { task: 'Προετοιμασία Παραγγελιών', time: '08:00 - 09:30', status: 'completed' },
-    { task: 'Επικοινωνία με πελάτες', time: '09:30 - 10:30', status: 'completed' },
-    { task: 'Δρομολόγηση', time: '10:30 - 11:30', status: 'ongoing' },
-    { task: 'Tιμολόγηση', time: '11:30 - 12:30', status: 'pending' },
-    { task: 'Απολογισμός & Προγραμματισμός', time: '12:30 - 13:00', status: 'pending' },
-]
+const weeklySales = [
+    { period: 'Αυτή η εβδομάδα', items: 450, change: 50 },
+    { period: 'Προηγούμενη εβδ.', items: 400, change: -100 },
+    { period: '2-9 Οκτ', items: 500, change: 80 },
+    { period: '25 Σεπτ - 1 Οκτ', items: 420, change: 20 },
+];
+
+const monthlySales = [
+    { period: 'Οκτώβριος', items: 1800, change: 200 },
+    { period: 'Σεπτέμβριος', items: 1600, change: -150 },
+    { period: 'Αύγουστος', items: 1750, change: 300 },
+    { period: 'Ιούλιος', items: 1450, change: 50 },
+    { period: 'Ιούνιος', items: 1400, change: -50 },
+];
+
+const renderSalesTable = (data: {period: string, items: number, change: number}[]) => (
+    <Table>
+        <TableHeader>
+            <TableRow>
+                <TableHead>Περίοδος</TableHead>
+                <TableHead className="text-center">Τεμάχια</TableHead>
+                <TableHead className="text-right">Απόκλιση</TableHead>
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            {data.map(sale => (
+                <TableRow key={sale.period}>
+                    <TableCell className="font-medium">{sale.period}</TableCell>
+                    <TableCell className="text-center">{sale.items}</TableCell>
+                    <TableCell className={cn(
+                        "text-right font-semibold flex justify-end items-center gap-1",
+                        sale.change > 0 ? 'text-green-500' : 'text-red-500'
+                    )}>
+                        {sale.change > 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                        {Math.abs(sale.change)}
+                    </TableCell>
+                </TableRow>
+            ))}
+        </TableBody>
+    </Table>
+);
+
+const SalesChart = ({ data, dataKey }: { data: any[], dataKey: string }) => (
+    <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`}/>
+            <Tooltip
+                contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                }}
+            />
+            <Bar dataKey={dataKey} fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+        </BarChart>
+    </ResponsiveContainer>
+);
+
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [currentRoutine, setCurrentRoutine] = useState(
-    dailyRoutine.map(item => ({ ...item, displayStatus: item.status }))
-  );
-
-  useEffect(() => {
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-
-    const getStatus = (timeRange: string, status: string) => {
-      if (status === 'completed') return 'completed';
-      const [start] = timeRange.split(' - ');
-      const [startHour, startMinute] = start.split(':').map(Number);
-      const startTime = startHour * 60 + startMinute;
-      
-      if (currentTime > startTime && status === 'pending') return 'delayed';
-      if (status === 'ongoing') return 'ongoing';
-
-      return 'pending';
-    };
-
-    const updatedRoutine = dailyRoutine.map(item => ({
-      ...item,
-      displayStatus: getStatus(item.time, item.status)
-    }));
-
-    setCurrentRoutine(updatedRoutine);
-  }, []);
 
   const handleRoleChange = (role: string) => {
     if (role === 'store') {
@@ -111,82 +130,54 @@ export default function AdminDashboardPage() {
           </Card>
         ))}
       </div>
-      <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>Πρόσφατες Παραγγελίες</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Πελάτης</TableHead>
-                  <TableHead className="hidden sm:table-cell">Κατάσταση</TableHead>
-                  <TableHead className="hidden md:table-cell">Ημερομηνία</TableHead>
-                  <TableHead className="text-right">Σύνολο</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentOrders.map(order => (
-                  <TableRow key={order.id}>
-                    <TableCell>
-                        <div className="font-medium">{order.customer}</div>
-                        <div className="hidden text-sm text-muted-foreground md:inline">{order.id}</div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell"><Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'}>{order.status}</Badge></TableCell>
-                    <TableCell className="hidden md:table-cell">{order.date}</TableCell>
-                    <TableCell className="text-right">{order.total}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Ημερήσια Ρουτίνα</CardTitle>
-                    <CardDescription>Η πρόοδος των σημερινών εργασιών</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {currentRoutine.map(item => {
-                       const status = item.displayStatus;
-                       return (
-                        <div key={item.task} className="flex items-start gap-3">
-                            <div>
-                                {status === 'completed' && <CheckCircle className="h-5 w-5 text-green-500" />}
-                                {status === 'ongoing' && <Clock className="h-5 w-5 text-blue-500 animate-pulse" />}
-                                {status === 'pending' && <Clock className="h-5 w-5 text-muted-foreground" />}
-                                {status === 'delayed' && <Clock className="h-5 w-5 text-red-500" />}
-                            </div>
-                            <div className="flex-1">
-                                <p className={cn("font-medium", status === 'ongoing' && "text-blue-500")}>{item.task}</p>
-                                <p className="text-xs text-muted-foreground">{item.time}</p>
-                            </div>
-                        </div>
-                       )
-                    })}
-                </CardContent>
-            </Card>
-        </div>
-      </div>
+      
       <Card>
         <CardHeader>
-            <CardTitle>Ανάλυση Παραγγελιών</CardTitle>
-            <CardDescription>Εβδομαδιαία σύγκριση</CardDescription>
+            <CardTitle>Ανάλυση Πωλήσεων</CardTitle>
+            <CardDescription>Συγκριτικά δεδομένα πωλήσεων ανά χρονική περίοδο.</CardDescription>
         </CardHeader>
         <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={salesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="Παραγγελίες" fill="hsl(var(--primary))" />
-                </BarChart>
-            </ResponsiveContainer>
+            <Tabs defaultValue="days">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                    <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                    <TabsTrigger value="months">Μήνες</TabsTrigger>
+                </TabsList>
+                <TabsContent value="days" className="mt-4">
+                    {renderSalesTable(dailySales)}
+                </TabsContent>
+                <TabsContent value="weeks" className="mt-4">
+                    {renderSalesTable(weeklySales)}
+                </TabsContent>
+                <TabsContent value="months" className="mt-4">
+                    {renderSalesTable(monthlySales)}
+                </TabsContent>
+            </Tabs>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle>Γράφημα Προόδου</CardTitle>
+            <CardDescription>Οπτικοποίηση της προόδου των πωλήσεών σας.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Tabs defaultValue="days">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                    <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                    <TabsTrigger value="months">Μήνες</TabsTrigger>
+                </TabsList>
+                <TabsContent value="days" className="mt-4">
+                    <SalesChart data={dailySales.slice().reverse()} dataKey="items" />
+                </TabsContent>
+                <TabsContent value="weeks" className="mt-4">
+                    <SalesChart data={weeklySales.slice().reverse()} dataKey="items" />
+                </TabsContent>
+                <TabsContent value="months" className="mt-4">
+                    <SalesChart data={monthlySales.slice().reverse()} dataKey="items" />
+                </TabsContent>
+            </Tabs>
         </CardContent>
       </Card>
     </>
