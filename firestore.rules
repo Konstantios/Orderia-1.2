@@ -178,7 +178,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       // Allow get/delete/update if user is a member of the order.
-      allow get, delete, update: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+      allow get, delete, update: if isSignedIn() && resource.data.memberUids is list && request.auth.uid in resource.data.memberUids;
       
       // Allow list if the user is signed in. The client query MUST constrain this
       // e.g., by using `where('memberUids', 'array-contains', request.auth.uid)`.
@@ -186,11 +186,11 @@ service cloud.firestore {
       allow list: if isSignedIn();
       
       // Allow create if the creator is in the member list.
-      allow create: if isSignedIn() && request.auth.uid in request.resource.data.memberUids;
+      allow create: if isSignedIn() && request.resource.data.memberUids is list && request.auth.uid in request.resource.data.memberUids;
 
       match /items/{orderItemId} {
         // Items can be accessed if the user can access the parent order.
-        allow read, write: if get(/databases/$(database)/documents/orders/$(orderId)).data.memberUids.hasAny([request.auth.uid]);
+        allow read, write: if get(/databases/$(database)/documents/orders/$(orderId)).data.memberUids is list && request.auth.uid in get(/databases/$(database)/documents/orders/$(orderId)).data.memberUids;
       }
     }
   }
