@@ -53,6 +53,7 @@ const pendingRequestsData = [
 export default function AdminTeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+    const [teamMembers, setTeamMembers] = useState(teamMembersData);
     const [pendingRequests, setPendingRequests] = useState(pendingRequestsData);
 
     const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
@@ -77,6 +78,7 @@ export default function AdminTeamPage() {
         setPendingRequests(prev => prev.filter(r => r.id !== requestId));
 
         if(accepted) {
+             setTeamMembers(prev => [...prev, { id: `user-${Date.now()}`, name: request.name, email: request.email, role: 'Πωλητής' }])
              toast({
                 title: "Το Αίτημα Εγκρίθηκε",
                 description: `Ο χρήστης ${request.name} έχει προστεθεί στην ομάδα.`,
@@ -197,7 +199,7 @@ export default function AdminTeamPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teamMembersData.map((member) => (
+                            {teamMembers.map((member) => (
                                 <TableRow key={member.email}>
                                     <TableCell className="font-medium">{member.name}</TableCell>
                                     <TableCell className="text-muted-foreground">{member.email}</TableCell>
