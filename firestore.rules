@@ -33,8 +33,8 @@ service cloud.firestore {
      * This is robust against the 'adminUids' field not existing or not being a list.
      */
     function isWholesalerMember(docData) {
-      return isSignedIn() && (
-        request.auth.uid == docData.ownerId ||
+      return docData != null && isSignedIn() && (
+        (docData.ownerId != null && request.auth.uid == docData.ownerId) ||
         (docData.adminUids is list && request.auth.uid in docData.adminUids)
       );
     }
@@ -51,8 +51,8 @@ service cloud.firestore {
      * This is robust against the 'managerUids' field not existing or not being a list.
      */
     function isStoreMember(docData) {
-      return isSignedIn() && (
-        request.auth.uid == docData.ownerId ||
+      return docData != null && isSignedIn() && (
+        (docData.ownerId != null && request.auth.uid == docData.ownerId) ||
         (docData.managerUids is list && request.auth.uid in docData.managerUids)
       );
     }
