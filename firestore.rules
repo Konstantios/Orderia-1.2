@@ -33,10 +33,10 @@ service cloud.firestore {
      * This is robust against the 'adminUids' field not existing or not being a list.
      */
     function isWholesalerMember(docData) {
-      return docData != null && isSignedIn() && (
-        (docData.get('ownerId', null) == request.auth.uid) ||
-        (request.auth.uid in docData.get('adminUids', []))
-      );
+      let isOwner = docData != null && docData.get('ownerId', null) == request.auth.uid;
+      let adminUids = docData.get('adminUids', []);
+      let isAdmin = adminUids is list && request.auth.uid in adminUids;
+      return isSignedIn() && (isOwner || isAdmin);
     }
     
     /**
@@ -51,10 +51,10 @@ service cloud.firestore {
      * This is robust against the 'managerUids' field not existing or not being a list.
      */
     function isStoreMember(docData) {
-      return docData != null && isSignedIn() && (
-        (docData.get('ownerId', null) == request.auth.uid) ||
-        (request.auth.uid in docData.get('managerUids', []))
-      );
+      let isOwner = docData != null && docData.get('ownerId', null) == request.auth.uid;
+      let managerUids = docData.get('managerUids', []);
+      let isManager = managerUids is list && request.auth.uid in managerUids;
+      return isSignedIn() && (isOwner || isManager);
     }
 
     /**
