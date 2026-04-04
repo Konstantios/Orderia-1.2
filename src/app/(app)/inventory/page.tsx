@@ -18,7 +18,7 @@ import { InventoryEntry } from './entry';
 import { InventoryExit } from './exit';
 import { useFirebase, useCollection, useFirestore, useMemoFirebase, setDocumentNonBlocking, type WithId } from '@/firebase';
 import { collection, query, where, doc, writeBatch, increment } from 'firebase/firestore';
-import type { Store, CustomerInventoryItem } from '@/lib/types';
+import type { Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -56,6 +56,13 @@ export default function InventoryPage() {
         return collection(firestore, 'stores', store.id, 'inventories');
     }, [firestore, store]);
     const { data: inventory, isLoading: isLoadingInventory } = useCollection<CustomerInventoryItem>(inventoryQuery);
+
+    // 3. Fetch store's product configurations (ideal stock)
+    const productConfigQuery = useMemoFirebase(() => {
+        if (!firestore || !store) return null;
+        return collection(firestore, 'stores', store.id, 'productConfigurations');
+    }, [firestore, store]);
+    const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
 
     // For now, assume a single hardcoded supplier and their products are available to the store
     const [supplier, setSupplier] = useState(customers[0]);
@@ -113,9 +120,19 @@ export default function InventoryPage() {
         setDocumentNonBlocking(docRef, { productId: productId, storeId: store.id, currentStock: stockValue }, { merge: true });
     };
 
+    const handleIdealStockChange = (productId: string, value: string) => {
+        if (!firestore || !store) return;
+
+        const newIdealStock = parseInt(value, 10);
+        const idealStockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
+
+        const docRef = doc(firestore, 'stores', store.id, 'productConfigurations', productId);
+        setDocumentNonBlocking(docRef, { productId: productId, storeId: store.id, idealStock: idealStockValue }, { merge: true });
+    };
+
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
-        const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
+        const idealStock = productConfigs?.find(i => i.id === productId)?.idealStock || 0;
         const inventoryItem = inventory?.find(i => i.id === productId);
         const currentStock = inventoryItem?.currentStock || 0;
         const lastAction = inventoryItem?.lastAction;
@@ -172,8 +189,8 @@ export default function InventoryPage() {
                                 <AccordionContent className="p-0">
                                     <div className="space-y-4 pt-4">
                                         <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Λιστα προϊοντων</h2>
-                                        {isLoadingInventory && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-                                        {!isLoadingInventory && inventoryProducts.map(({ id }) => {
+                                        {(isLoadingInventory || isLoadingProductConfigs) && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+                                        {!(isLoadingInventory || isLoadingProductConfigs) && inventoryProducts.map(({ id }) => {
                                             const { product, idealStock, currentStock, suggestion, lastAction } = getProductData(id);
                                             if (!product) return null;
 
@@ -209,8 +226,9 @@ export default function InventoryPage() {
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
                                                                 <Input
                                                                     type="number"
-                                                                    readOnly
-                                                                    value={idealStock}
+                                                                    defaultValue={idealStock}
+                                                                    onBlur={(e) => handleIdealStockChange(id, e.target.value)}
+                                                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                                                                     className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                                                                     min="0"
                                                                 />

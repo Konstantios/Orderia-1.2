@@ -45,11 +45,21 @@ export interface Store {
 export interface CustomerInventoryItem {
   id: string;
   productId: string;
+  storeId: string;
   currentStock: number;
   lastAction?: {
     type: 'in' | 'out' | 'counting';
     value: number;
   };
+}
+
+export interface StoreProductConfiguration {
+  id: string;
+  storeId: string;
+  productId: string;
+  idealStock: number;
+  defaultOrderQuantity?: number;
+  customPrice?: number;
 }
 
 export interface OrderItem {
