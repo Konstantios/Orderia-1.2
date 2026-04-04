@@ -8,7 +8,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Bell } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import { Logo } from '@/components/logo';
 
 const navItems = [
@@ -21,11 +20,6 @@ const navItems = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -41,27 +35,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Bell className="h-5 w-5 text-primary" />
             <span className="sr-only">Εναλλαγή ειδοποιήσεων</span>
           </Button>
-          {isClient && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Avatar className="h-9 w-9 border-2 border-primary/50">
-                    <AvatarImage src="https://picsum.photos/seed/avatar/100/100" alt="Avatar" data-ai-hint="bakery owner" />
-                    <AvatarFallback>FG</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Ο Λογαριασμός μου</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/account">Τα Στοιχεία μου</Link></DropdownMenuItem>
-                <DropdownMenuItem>Ρυθμίσεις</DropdownMenuItem>
-                <DropdownMenuItem>Υποστήριξη</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/">Αποσύνδεση</Link></DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar className="h-9 w-9 border-2 border-primary/50">
+                  <AvatarImage src="https://picsum.photos/seed/avatar/100/100" alt="Avatar" data-ai-hint="bakery owner" />
+                  <AvatarFallback>FG</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Ο Λογαριασμός μου</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/account">Τα Στοιχεία μου</Link></DropdownMenuItem>
+              <DropdownMenuItem>Ρυθμίσεις</DropdownMenuItem>
+              <DropdownMenuItem>Υποστήριξη</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/">Αποσύνδεση</Link></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
