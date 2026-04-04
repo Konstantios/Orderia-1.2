@@ -31,6 +31,17 @@ export interface AdminCustomer {
   contactName: string;
 }
 
+export interface Store {
+    id: string;
+    businessName: string;
+    ownerName: string;
+    taxId: string;
+    phone: string;
+    email: string;
+    address: string;
+    ownerId: string;
+}
+
 export interface CustomerInventoryItem {
   productId: string;
   currentStock: number;

@@ -54,6 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Ο Λογαριασμός μου</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/account">Τα Στοιχεία μου</Link></DropdownMenuItem>
                 <DropdownMenuItem>Ρυθμίσεις</DropdownMenuItem>
                 <DropdownMenuItem>Υποστήριξη</DropdownMenuItem>
                 <DropdownMenuSeparator />
