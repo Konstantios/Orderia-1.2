@@ -23,6 +23,7 @@ const navItems = [
   { href: '/admin/dashboard', label: 'Πίνακας Ελέγχου', icon: Icons.dashboard },
   { href: '/admin/orders', label: 'Παραγγελίες', icon: Icons.newOrder },
   { href: '/admin/customers', label: 'Πελάτες', icon: Icons.customers },
+  { href: '/admin/products', label: 'Προϊόντα', icon: Icons.inventory },
   { href: '/admin/warehouse', label: 'Αποθήκη', icon: Icons.warehouse },
   { href: '/admin/reports', label: 'Αναφορές', icon: Icons.reports },
   { href: '/admin/team', label: 'Ομάδα', icon: Icons.team },

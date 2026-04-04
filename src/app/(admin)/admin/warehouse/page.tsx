@@ -3,17 +3,15 @@
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { products as allProducts } from '@/lib/data';
 import { useState, useMemo, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { AdminWarehouseCounting } from './counting';
-import { AdminWarehouseDatabase } from './database';
 import { AdminWarehouseEntry } from './entry';
 import { AdminWarehouseExit } from './exit';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import type { WholesalerStockItem, Warehouse } from '@/lib/types';
+import type { WholesalerStockItem, Warehouse, Wholesaler, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Download, PlusCircle, Loader2, Minus, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -57,7 +55,7 @@ export default function AdminWarehousePage() {
         return query(collection(firestore, 'wholesalers'), where('adminUids', 'array-contains', user.uid));
     }, [firestore, user]);
 
-    const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<any>(wholesalerQuery);
+    const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<Wholesaler>(wholesalerQuery);
     const wholesaler = wholesalers?.[0];
     const wholesalerId = wholesaler?.id;
 
@@ -67,15 +65,20 @@ export default function AdminWarehousePage() {
     }, [firestore, wholesalerId]);
 
     const { data: warehouses, isLoading: isLoadingUserWarehouses } = useCollection<Warehouse>(warehousesQuery);
+    
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesalerId) return null;
+        return collection(firestore, 'wholesalers', wholesalerId, 'products');
+    }, [firestore, wholesalerId]);
+    const { data: allProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
 
     const stockQuery = useMemoFirebase(() => {
-        if (!firestore || !wholesalerId || !activeTab || activeTab === 'database') return null;
+        if (!firestore || !wholesalerId || !activeTab) return null;
         return collection(firestore, 'wholesalers', wholesalerId, 'warehouses', activeTab, 'inventories');
     }, [firestore, wholesalerId, activeTab]);
 
     const { data: stock, isLoading: isLoadingStock } = useCollection<WholesalerStockItem>(stockQuery);
 
-    // Effect to set the first warehouse as active tab once loaded
     useEffect(() => {
       if (!activeTab && warehouses && warehouses.length > 0) {
         setActiveTab(warehouses[0].id);
@@ -190,6 +193,7 @@ export default function AdminWarehousePage() {
     };
 
     const getStockData = (productId: string) => {
+        if (!allProducts) return { product: null, currentStock: 0, idealStock: 0, suggestion: 0, lastAction: undefined };
         const product = allProducts.find(p => p.id === productId)!;
         const stockItem = stock?.find(i => i.id === productId);
         const currentStock = stockItem?.quantity || 0;
@@ -200,6 +204,10 @@ export default function AdminWarehousePage() {
     };
 
     const handleExport = (warehouse: WithId<Warehouse>) => {
+        if (!allProducts) {
+             toast({ title: "Δεν υπάρχουν προϊόντα", variant: "destructive" });
+             return;
+        }
         const warehouseStock = stock || [];
         const dataToExport = allProducts.map(product => {
             const stockItem = warehouseStock.find(s => s.id === product.id);
@@ -254,6 +262,8 @@ export default function AdminWarehousePage() {
             </div>
         );
     }
+    
+    const productsForWarehouse = allProducts || [];
 
     return (
         <div className="space-y-6">
@@ -269,7 +279,6 @@ export default function AdminWarehousePage() {
                     {warehouses && warehouses.map(wh => (
                         <TabsTrigger key={wh.id} value={wh.id}>{wh.name}</TabsTrigger>
                     ))}
-                    <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
                 </TabsList>
                 
                 {warehouses && warehouses.map(warehouse => (
@@ -295,8 +304,8 @@ export default function AdminWarehousePage() {
                                             <CardDescription>Επισκόπηση του αποθέματος για όλα τα προϊόντα σε αυτή την αποθήκη.</CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
-                                            {(isLoadingStock || isLoadingUserWarehouses) && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-                                            {!isLoadingStock && !isLoadingUserWarehouses && allProducts.map(product => {
+                                            {(isLoadingStock || isLoadingUserWarehouses || isLoadingProducts) && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+                                            {!(isLoadingStock || isLoadingUserWarehouses || isLoadingProducts) && productsForWarehouse.map(product => {
                                                 const { currentStock, idealStock, suggestion, lastAction } = getStockData(product.id);
                                                 const lastActionInfo = lastAction ? {
                                                     'in': { text: 'Είσοδος', color: 'text-green-500' },
@@ -382,13 +391,13 @@ export default function AdminWarehousePage() {
                                 </div>
                             </TabsContent>
                              <TabsContent value="counting">
-                                <AdminWarehouseCounting products={allProducts} stock={stock || []} onSync={(items) => handleSync(items, 'counting', warehouse.id)} />
+                                <AdminWarehouseCounting products={productsForWarehouse} stock={stock || []} onSync={(items) => handleSync(items, 'counting', warehouse.id)} />
                             </TabsContent>
                             <TabsContent value="in">
-                                <AdminWarehouseEntry products={allProducts} stock={stock || []} onSync={(items) => handleSync(items, 'in', warehouse.id)} />
+                                <AdminWarehouseEntry products={productsForWarehouse} stock={stock || []} onSync={(items) => handleSync(items, 'in', warehouse.id)} />
                             </TabsContent>
                             <TabsContent value="out">
-                                <AdminWarehouseExit products={allProducts} stock={stock || []} onSync={(items) => handleSync(items, 'out', warehouse.id)} />
+                                <AdminWarehouseExit products={productsForWarehouse} stock={stock || []} onSync={(items) => handleSync(items, 'out', warehouse.id)} />
                             </TabsContent>
                         </Tabs>
                     </TabsContent>
@@ -402,34 +411,29 @@ export default function AdminWarehousePage() {
                         <p className="text-muted-foreground mt-2">Πατήστε "Προσθήκη Αποθήκης" για να δημιουργήσετε την πρώτη σας.</p>
                     </TabsContent>
                 }
-
-
-            <TabsContent value="database" className="mt-6">
-                <AdminWarehouseDatabase products={allProducts} />
-            </TabsContent>
-        </Tabs>
+            </Tabs>
         
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Προσθήκη Νέας Αποθήκης</DialogTitle>
-                    <DialogDescription>Δώστε ένα όνομα για τη νέα σας αποθήκη.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                    <Input
-                        id="warehouseName"
-                        placeholder="π.χ. Αποθήκη Κέντρου"
-                        value={newWarehouseName}
-                        onChange={(e) => setNewWarehouseName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddWarehouse()}
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Ακύρωση</Button>
-                    <Button onClick={handleAddWarehouse}>Αποθήκευση</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Προσθήκη Νέας Αποθήκης</DialogTitle>
+                        <DialogDescription>Δώστε ένα όνομα για τη νέα σας αποθήκη.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            id="warehouseName"
+                            placeholder="π.χ. Αποθήκη Κέντρου"
+                            value={newWarehouseName}
+                            onChange={(e) => setNewWarehouseName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddWarehouse()}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Ακύρωση</Button>
+                        <Button onClick={handleAddWarehouse}>Αποθήκευση</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
       </div>
     );
 }

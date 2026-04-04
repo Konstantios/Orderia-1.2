@@ -104,8 +104,10 @@ service cloud.firestore {
       allow update, delete: if isExistingWholesalerMember(resource.data);
 
       match /products/{productId} {
-        // Simplified rule to unblock development. Relies on client querying correct paths.
-        allow read, write: if isSignedIn();
+        // Any signed-in user can read products (e.g., a customer browsing)
+        // Write operations are restricted to members of the parent wholesaler.
+        allow read: if isSignedIn();
+        allow write: if isWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data);
       }
       
       match /warehouses/{warehouseId} {

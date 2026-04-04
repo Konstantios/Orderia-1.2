@@ -5,6 +5,9 @@ export interface Product {
   imageUrl: string;
   imageHint: string;
   unit: 'κιβώτιο' | 'κιλό' | 'τεμάχιο';
+  wholesalerId?: string;
+  wholesalerOwnerId?: string;
+  wholesalerAdminUids?: string[];
 }
 
 export interface CustomerProduct {
