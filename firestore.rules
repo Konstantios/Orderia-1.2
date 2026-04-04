@@ -35,7 +35,7 @@ service cloud.firestore {
     function isWholesalerMember(docData) {
       return isSignedIn() && (
         request.auth.uid == docData.ownerId ||
-        ('adminUids' in docData && docData.adminUids is list && request.auth.uid in docData.adminUids)
+        (docData.adminUids is list && request.auth.uid in docData.adminUids)
       );
     }
     
@@ -53,7 +53,7 @@ service cloud.firestore {
     function isStoreMember(docData) {
       return isSignedIn() && (
         request.auth.uid == docData.ownerId ||
-        ('managerUids' in docData && docData.managerUids is list && request.auth.uid in docData.managerUids)
+        (docData.managerUids is list && request.auth.uid in docData.managerUids)
       );
     }
 
@@ -70,17 +70,16 @@ service cloud.firestore {
      */
     function isEitherPartyMember(docData) {
       return isSignedIn() && (
-        (request.auth.uid == docData.storeOwnerId || (docData.keys().hasAny(['storeManagerUids']) && request.auth.uid in docData.storeManagerUids)) ||
-        (request.auth.uid == docData.wholesalerOwnerId || (docData.keys().hasAny(['wholesalerAdminUids']) && request.auth.uid in docData.wholesalerAdminUids))
+        (request.auth.uid == docData.storeOwnerId || (docData.storeManagerUids is list && request.auth.uid in docData.storeManagerUids)) ||
+        (request.auth.uid == docData.wholesalerOwnerId || (docData.wholesalerAdminUids is list && request.auth.uid in docData.wholesalerAdminUids))
       );
     }
     
     function isBusinessOwner(businessId, businessType) {
       let path = businessType == 'store' ? /databases/$(database)/documents/stores/$(businessId) : /databases/$(database)/documents/wholesalers/$(businessId);
-      let businessDoc = get(path);
-      return businessDoc.exists() && (
-        (businessType == 'store' && isStoreMember(businessDoc.data)) || 
-        (businessType == 'wholesaler' && isWholesalerMember(businessDoc.data))
+      return exists(path) && (
+        (businessType == 'store' && isStoreMember(get(path).data)) || 
+        (businessType == 'wholesaler' && isWholesalerMember(get(path).data))
       );
     }
 
