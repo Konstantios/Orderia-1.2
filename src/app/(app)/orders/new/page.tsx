@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirebase, useCollection, useMemoFirebase, type WithId } from '@/firebase';
 import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 
 const customer = customers[0];
@@ -35,13 +35,43 @@ export default function NewOrderPage() {
 
   const { user, firestore } = useFirebase();
 
-  // Data fetching from Firestore
-  const storeQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
-  }, [firestore, user]);
-  const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
-  const store = stores?.[0];
+  const [store, setStore] = useState<WithId<Store> | null>(null);
+  const [isLoadingStores, setIsLoadingStores] = useState(true);
+
+  // Robustly fetch user's store
+  useEffect(() => {
+      if (!firestore || !user) {
+          setIsLoadingStores(false);
+          return;
+      };
+
+      const findStore = async () => {
+          setIsLoadingStores(true);
+          const storesRef = collection(firestore, 'stores');
+          
+          const ownerQuery = query(storesRef, where("ownerId", "==", user.uid));
+          const managerQuery = query(storesRef, where("managerUids", "array-contains", user.uid));
+
+          const [ownerSnap, managerSnap] = await Promise.all([
+              getDocs(ownerQuery),
+              getDocs(managerQuery)
+          ]);
+
+          let foundStore: WithId<Store> | null = null;
+          if (!ownerSnap.empty) {
+              const storeDoc = ownerSnap.docs[0];
+              foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+          } else if (!managerSnap.empty) {
+               const storeDoc = managerSnap.docs[0];
+               foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+          }
+          
+          setStore(foundStore);
+          setIsLoadingStores(false);
+      }
+
+      findStore();
+  }, [user, firestore]);
 
   const inventoryQuery = useMemoFirebase(() => {
       if (!firestore || !store) return null;
