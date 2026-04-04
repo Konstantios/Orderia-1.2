@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, WithId } from "@/firebase";
-import { collection, query, where, doc, getDocs, writeBatch, documentId, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, doc, getDocs, writeBatch, documentId, serverTimestamp, limit } from "firebase/firestore";
 
 
 const CustomerForm = ({ customer, onSave, onCancel }: { customer: Partial<Store> | null; onSave: (customer: Omit<Store, 'id' | 'ownerId' | 'managerUids'>) => void; onCancel: () => void }) => {
