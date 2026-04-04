@@ -139,7 +139,9 @@ service cloud.firestore {
      */
     match /wholesalers/{wholesalerId} {
       allow get: if isWholesalerMember(resource.data);
-      allow list: if true; // Allow unauthenticated search for join-by-AFM
+      // Allow unauthenticated search by AFM (limit 1) or any list query for authenticated users.
+      // Authenticated queries MUST be constrained on the client to only fetch data the user can access.
+      allow list: if (request.auth == null && request.query.limit == 1) || request.auth != null;
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingWholesalerMember(resource.data);
       allow delete: if isExistingWholesalerMember(resource.data);
@@ -209,7 +211,9 @@ service cloud.firestore {
      */
     match /stores/{storeId} {
       allow get: if isStoreMember(resource.data);
-      allow list: if true; // Allow unauthenticated search for join-by-AFM
+      // Allow unauthenticated search by AFM (limit 1) or any list query for authenticated users.
+      // Authenticated queries MUST be constrained on the client to only fetch data the user can access.
+      allow list: if (request.auth == null && request.query.limit == 1) || request.auth != null;
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingStoreMember(resource.data);
       allow delete: if isExistingStoreMember(resource.data);

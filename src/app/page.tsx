@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft, Loader2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, query, where, updateDoc, getDoc, arrayUnion, addDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, where, updateDoc, getDoc, arrayUnion, addDoc, limit } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile, type User } from 'firebase/auth';
 import { wholesalerStock } from '@/lib/data';
 
@@ -132,8 +132,8 @@ export default function LoginPage() {
         const storesRef = collection(firestore, 'stores');
         const wholesalersRef = collection(firestore, 'wholesalers');
 
-        const storeQuery = query(storesRef, where("taxId", "==", searchAfm));
-        const wholesalerQuery = query(wholesalersRef, where("taxId", "==", searchAfm));
+        const storeQuery = query(storesRef, where("taxId", "==", searchAfm), limit(1));
+        const wholesalerQuery = query(wholesalersRef, where("taxId", "==", searchAfm), limit(1));
 
         const [storeSnapshot, wholesalerSnapshot] = await Promise.all([
             getDocs(storeQuery),
