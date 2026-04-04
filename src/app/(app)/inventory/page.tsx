@@ -102,6 +102,16 @@ export default function InventoryPage() {
             description: 'Το απόθεμα ενημερώθηκε.',
         });
     };
+    
+    const handleStockChange = (productId: string, value: string) => {
+        if (!firestore || !store) return;
+
+        const newStock = parseInt(value, 10);
+        const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
+
+        const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
+        setDocumentNonBlocking(docRef, { productId: productId, currentStock: stockValue }, { merge: true });
+    };
 
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
@@ -184,9 +194,16 @@ export default function InventoryPage() {
                                                             </div>
                                                         </div>
                                                         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                                            <div className={cn('rounded-lg border p-2', getStockColor(currentStock, idealStock))}>
+                                                            <div className={cn('rounded-lg border p-2 flex flex-col justify-center', getStockColor(currentStock, idealStock))}>
                                                                 <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
-                                                                <p className="text-2xl font-bold">{currentStock}</p>
+                                                                <Input
+                                                                    type="number"
+                                                                    defaultValue={currentStock}
+                                                                    onBlur={(e) => handleStockChange(id, e.target.value)}
+                                                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                    className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                    min="0"
+                                                                />
                                                             </div>
                                                             <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>

@@ -154,6 +154,16 @@ export default function AdminWarehousePage() {
         setDocumentNonBlocking(docRef, { productId: productId, idealStock: stockValue }, { merge: true });
     };
 
+    const handleCurrentStockChange = (productId: string, value: string, warehouseId: string) => {
+        const newStock = parseInt(value, 10);
+        const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
+        
+        if (!firestore || !wholesalerId) return;
+
+        const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
+        setDocumentNonBlocking(docRef, { productId: productId, quantity: stockValue }, { merge: true });
+    };
+
     const getStockData = (productId: string) => {
         const product = allProducts.find(p => p.id === productId)!;
         const stockItem = stock?.find(i => i.id === productId);
@@ -280,9 +290,16 @@ export default function AdminWarehousePage() {
                                                                 </div>
                                                             </div>
                                                             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                                                <div className={cn('rounded-lg border p-2', getStockColor(currentStock, idealStock))}>
+                                                                <div className={cn('rounded-lg border p-2 flex flex-col justify-center', getStockColor(currentStock, idealStock))}>
                                                                     <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
-                                                                    <p className="text-2xl font-bold">{currentStock}</p>
+                                                                    <Input
+                                                                        type="number"
+                                                                        defaultValue={currentStock}
+                                                                        onBlur={(e) => handleCurrentStockChange(product.id, e.target.value, warehouse.id)}
+                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                        className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                        min="0"
+                                                                    />
                                                                 </div>
                                                                 <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
                                                                     <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
