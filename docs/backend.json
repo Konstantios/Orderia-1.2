@@ -1,0 +1,715 @@
+{
+  "entities": {
+    "Wholesaler": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Wholesaler",
+      "type": "object",
+      "description": "Represents a wholesale business acting as a supplier in the Orderia platform. Wholesalers manage their products, customers, and inventory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Wholesaler entity."
+        },
+        "companyName": {
+          "type": "string",
+          "description": "The official business name of the wholesale company."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL to the wholesaler's official logo image.",
+          "format": "uri"
+        },
+        "taxId": {
+          "type": "string",
+          "description": "Unique tax identification number for the wholesaler (e.g., A.F.M. in Greece)."
+        },
+        "phone": {
+          "type": "string",
+          "description": "The primary contact phone number for the wholesaler."
+        },
+        "email": {
+          "type": "string",
+          "description": "The primary contact email address for the wholesaler.",
+          "format": "email"
+        },
+        "address": {
+          "type": "string",
+          "description": "The full physical address of the wholesaler."
+        },
+        "supplierCode": {
+          "type": "string",
+          "description": "A unique, short code provided by the wholesaler for stores to use during the onboarding process to easily connect."
+        },
+        "productCategories": {
+          "type": "array",
+          "description": "A list of product categories that the wholesaler offers (e.g., 'Frozen Foods', 'Baked Goods').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serviceArea": {
+          "type": "string",
+          "description": "A description of the geographical area or regions the wholesaler serves for deliveries."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief overview or description of the wholesaler's business, visible to potential customers."
+        },
+        "orderAcceptanceHours": {
+          "type": "string",
+          "description": "A string indicating the hours during which the wholesaler accepts new orders (e.g., 'Mon-Fri 09:00-17:00')."
+        }
+      },
+      "required": [
+        "id",
+        "companyName",
+        "taxId",
+        "phone",
+        "email",
+        "address",
+        "supplierCode",
+        "productCategories",
+        "serviceArea",
+        "description",
+        "orderAcceptanceHours"
+      ]
+    },
+    "Store": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Store",
+      "type": "object",
+      "description": "Represents a retail business (customer) that places orders with one or more wholesalers through the Orderia platform.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Store entity."
+        },
+        "businessName": {
+          "type": "string",
+          "description": "The official business name of the retail store."
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "The name of the store owner or a primary contact person for the store."
+        },
+        "taxId": {
+          "type": "string",
+          "description": "Unique tax identification number for the store (e.g., A.F.M. in Greece)."
+        },
+        "phone": {
+          "type": "string",
+          "description": "The primary contact phone number for the store."
+        },
+        "email": {
+          "type": "string",
+          "description": "The primary contact email address for the store.",
+          "format": "email"
+        },
+        "address": {
+          "type": "string",
+          "description": "The full physical address of the retail store."
+        },
+        "orderDays": {
+          "type": "array",
+          "description": "A list of days of the week when the store typically places orders (e.g., ['Monday', 'Wednesday']).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notificationTime": {
+          "type": "string",
+          "description": "The preferred time for receiving order reminder notifications (e.g., '09:00')."
+        }
+      },
+      "required": [
+        "id",
+        "businessName",
+        "ownerName",
+        "phone",
+        "email",
+        "address"
+      ]
+    },
+    "SupplierStoreRequest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SupplierStoreRequest",
+      "type": "object",
+      "description": "Manages a pending request from a store to connect with a wholesaler, initiating the multi-supplier onboarding process.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SupplierStoreRequest entity."
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "Reference to the Wholesaler who received the connection request. (Relationship: Wholesaler 1:N SupplierStoreRequest)"
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Reference to the Store that sent the connection request. (Relationship: Store 1:N SupplierStoreRequest)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the connection request (e.g., 'pending', 'approved', 'rejected')."
+        },
+        "requestDate": {
+          "type": "string",
+          "description": "The date and time when the connection request was initiated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "wholesalerId",
+        "storeId",
+        "status",
+        "requestDate"
+      ]
+    },
+    "SupplierStoreConnection": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SupplierStoreConnection",
+      "type": "object",
+      "description": "Represents an established, approved, and active connection between a store and a wholesaler.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SupplierStoreConnection entity."
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "Reference to the Wholesaler in this connection. (Relationship: Wholesaler 1:N SupplierStoreConnection)"
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Reference to the Store in this connection. (Relationship: Store 1:N SupplierStoreConnection)"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "A boolean indicating if the connection is currently active and usable for ordering."
+        },
+        "connectionDate": {
+          "type": "string",
+          "description": "The date and time when the connection was officially approved and established.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "wholesalerId",
+        "storeId",
+        "isActive",
+        "connectionDate"
+      ]
+    },
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a specific product offered by a wholesaler in the Orderia platform.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Product entity."
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "Reference to the Wholesaler who offers this product. (Relationship: Wholesaler 1:N Product)"
+        },
+        "code": {
+          "type": "string",
+          "description": "A unique internal alphanumeric code for the product within the wholesaler's system."
+        },
+        "title": {
+          "type": "string",
+          "description": "The common name or title of the product (e.g., 'Κρουασάν Βουτύρου')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the product, including ingredients or specifications."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL to an image of the product, used for display in the app.",
+          "format": "uri"
+        },
+        "barcode": {
+          "type": "string",
+          "description": "The barcode associated with the product, used for scanning in inventory management."
+        },
+        "unitOfMeasure": {
+          "type": "string",
+          "description": "The unit in which the product is sold and ordered (e.g., 'κιβώτια' for boxes, 'τεμάχια' for pieces)."
+        },
+        "basePrice": {
+          "type": "number",
+          "description": "The standard base price per unit of the product."
+        }
+      },
+      "required": [
+        "id",
+        "wholesalerId",
+        "code",
+        "title",
+        "barcode",
+        "unitOfMeasure",
+        "basePrice"
+      ]
+    },
+    "StoreProductConfiguration": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StoreProductConfiguration",
+      "type": "object",
+      "description": "Defines specific settings and preferences for a particular product as it pertains to a particular store from a specific wholesaler. This allows for customized ideal stock levels and pricing.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the StoreProductConfiguration entity."
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Reference to the Store for which this configuration applies. (Relationship: Store 1:N StoreProductConfiguration)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to the Product for which this configuration applies. (Relationship: Product 1:N StoreProductConfiguration)"
+        },
+        "idealStock": {
+          "type": "number",
+          "description": "The ideal quantity of this product that the store should aim to keep in stock, used for automatic order suggestions."
+        },
+        "defaultOrderQuantity": {
+          "type": "number",
+          "description": "A suggested default quantity for the store to order for this product, used in initial order proposals."
+        },
+        "customPrice": {
+          "type": "number",
+          "description": "An optional custom price per unit for this specific product for this particular store, if it differs from the product's base price."
+        }
+      },
+      "required": [
+        "id",
+        "storeId",
+        "productId",
+        "idealStock"
+      ]
+    },
+    "StoreInventory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StoreInventory",
+      "type": "object",
+      "description": "Records the current stock level of a product in a customer's (store's) warehouse, allowing for inventory management and automated order suggestions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the StoreInventory entity."
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Reference to the Store whose inventory this record belongs to. (Relationship: Store 1:N StoreInventory)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to the Product whose stock level is being recorded. (Relationship: Product 1:N StoreInventory)"
+        },
+        "currentStock": {
+          "type": "number",
+          "description": "The current quantity of the product observed in the store's inventory."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The date and time when this inventory record was last updated, either manually or via barcode scan.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "storeId",
+        "productId",
+        "currentStock",
+        "lastUpdated"
+      ]
+    },
+    "WholesalerInventory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WholesalerInventory",
+      "type": "object",
+      "description": "Records the current stock level of a product in the wholesaler's own warehouse, enabling stock tracking and low-stock alerts.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the WholesalerInventory entity."
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "Reference to the Wholesaler whose inventory this record belongs to. (Relationship: Wholesaler 1:N WholesalerInventory)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to the Product whose stock level is being recorded. (Relationship: Product 1:N WholesalerInventory)"
+        },
+        "currentStock": {
+          "type": "number",
+          "description": "The current quantity of the product in the wholesaler's inventory."
+        },
+        "lowStockThreshold": {
+          "type": "number",
+          "description": "The quantity below which a low stock alert should be triggered for this product."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The date and time when this inventory record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "wholesalerId",
+        "productId",
+        "currentStock",
+        "lowStockThreshold",
+        "lastUpdated"
+      ]
+    },
+    "WholesalerInventoryLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WholesalerInventoryLog",
+      "type": "object",
+      "description": "Tracks all changes (inflows, outflows, adjustments) to a specific wholesaler's product inventory for auditing and historical analysis.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the WholesalerInventoryLog entity."
+        },
+        "wholesalerInventoryId": {
+          "type": "string",
+          "description": "Reference to the specific WholesalerInventory record this log entry pertains to. (Relationship: WholesalerInventory 1:N WholesalerInventoryLog)"
+        },
+        "changeType": {
+          "type": "string",
+          "description": "Describes the type of inventory change (e.g., 'inflow' for new stock, 'outflow' for shipped orders, 'adjustment' for corrections)."
+        },
+        "quantityChange": {
+          "type": "number",
+          "description": "The quantity by which the stock level changed (positive for increases, negative for decreases)."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the inventory change occurred.",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string",
+          "description": "A brief description or reason for the inventory change (e.g., 'delivery received', 'customer order fulfilled', 'manual correction')."
+        }
+      },
+      "required": [
+        "id",
+        "wholesalerInventoryId",
+        "changeType",
+        "quantityChange",
+        "timestamp",
+        "reason"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a complete order placed by a store with a wholesaler, containing overall order details and status.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "storeId": {
+          "type": "string",
+          "description": "Reference to the Store that placed this order. (Relationship: Store 1:N Order)"
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "Reference to the Wholesaler from whom this order was placed. (Relationship: Wholesaler 1:N Order)"
+        },
+        "orderDate": {
+          "type": "string",
+          "description": "The date and time when the order was placed by the store.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current processing status of the order (e.g., 'pending', 'processing', 'shipped', 'delivered', 'cancelled')."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Any additional notes or special instructions provided for this order (e.g., 'delivery before 08:00', 'extra ice packs')."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The total monetary value of all items in the order, including any applicable discounts or taxes."
+        },
+        "estimatedDeliveryDate": {
+          "type": "string",
+          "description": "The estimated date for the delivery of this order.",
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "storeId",
+        "wholesalerId",
+        "orderDate",
+        "status"
+      ]
+    },
+    "OrderItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OrderItem",
+      "type": "object",
+      "description": "Represents a single product line item within a larger order, detailing the quantity and price of that specific product.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the OrderItem entity."
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Reference to the parent Order this item belongs to. (Relationship: Order 1:N OrderItem)"
+        },
+        "productId": {
+          "type": "string",
+          "description": "Reference to the Product being ordered. (Relationship: Product 1:N OrderItem)"
+        },
+        "orderedQuantity": {
+          "type": "number",
+          "description": "The quantity of the product specified in this order item (e.g., number of 'κιβώτια')."
+        },
+        "priceAtOrder": {
+          "type": "number",
+          "description": "The price per unit of the product at the exact time the order was placed, ensuring historical price accuracy."
+        }
+      },
+      "required": [
+        "id",
+        "orderId",
+        "productId",
+        "orderedQuantity",
+        "priceAtOrder"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/wholesalers/{wholesalerId}",
+        "definition": {
+          "entityName": "Wholesaler",
+          "schema": {
+            "$ref": "#/backend/entities/Wholesaler"
+          },
+          "description": "Represents a wholesaler's profile and main data. Includes denormalized 'ownerId' and 'adminUids' for authorization independence, indicating which users can manage this wholesaler's data.",
+          "params": [
+            {
+              "name": "wholesalerId",
+              "description": "Unique identifier for the Wholesaler."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/wholesalers/{wholesalerId}/products/{productId}",
+        "definition": {
+          "entityName": "Product",
+          "schema": {
+            "$ref": "#/backend/entities/Product"
+          },
+          "description": "A subcollection for products offered by a specific wholesaler. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' for authorization independence, allowing wholesaler members to manage their products.",
+          "params": [
+            {
+              "name": "wholesalerId",
+              "description": "Unique identifier of the owning Wholesaler."
+            },
+            {
+              "name": "productId",
+              "description": "Unique identifier for the Product within this wholesaler's catalog."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}",
+        "definition": {
+          "entityName": "WholesalerInventory",
+          "schema": {
+            "$ref": "#/backend/entities/WholesalerInventory"
+          },
+          "description": "A subcollection for tracking the stock levels of products in a wholesaler's warehouse. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' for authorization independence.",
+          "params": [
+            {
+              "name": "wholesalerId",
+              "description": "Unique identifier of the owning Wholesaler."
+            },
+            {
+              "name": "wholesalerInventoryId",
+              "description": "Unique identifier for the inventory record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}/logs/{wholesalerInventoryLogId}",
+        "definition": {
+          "entityName": "WholesalerInventoryLog",
+          "schema": {
+            "$ref": "#/backend/entities/WholesalerInventoryLog"
+          },
+          "description": "A subcollection for logging inventory changes for a specific wholesaler's product. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' from the parent wholesaler and inventory for authorization independence.",
+          "params": [
+            {
+              "name": "wholesalerId",
+              "description": "Unique identifier of the owning Wholesaler."
+            },
+            {
+              "name": "wholesalerInventoryId",
+              "description": "Unique identifier for the parent WholesalerInventory record."
+            },
+            {
+              "name": "wholesalerInventoryLogId",
+              "description": "Unique identifier for the inventory log entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/stores/{storeId}",
+        "definition": {
+          "entityName": "Store",
+          "schema": {
+            "$ref": "#/backend/entities/Store"
+          },
+          "description": "Represents a retail store's profile and main data. Includes denormalized 'ownerId' and 'managerUids' for authorization independence, indicating which users can manage this store's data.",
+          "params": [
+            {
+              "name": "storeId",
+              "description": "Unique identifier for the Store."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/stores/{storeId}/productConfigurations/{storeProductConfigurationId}",
+        "definition": {
+          "entityName": "StoreProductConfiguration",
+          "schema": {
+            "$ref": "#/backend/entities/StoreProductConfiguration"
+          },
+          "description": "A subcollection for store-specific product settings. Includes denormalized 'storeId', 'storeOwnerId', 'storeManagerUids' (from parent Store) and 'wholesalerId', 'wholesalerOwnerId', 'wholesalerAdminUids' (from the product's wholesaler) for authorization independence.",
+          "params": [
+            {
+              "name": "storeId",
+              "description": "Unique identifier of the owning Store."
+            },
+            {
+              "name": "storeProductConfigurationId",
+              "description": "Unique identifier for the product configuration record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/stores/{storeId}/inventories/{storeInventoryId}",
+        "definition": {
+          "entityName": "StoreInventory",
+          "schema": {
+            "$ref": "#/backend/entities/StoreInventory"
+          },
+          "description": "A subcollection for tracking the current stock levels of products in a store's warehouse. Includes denormalized 'storeId', 'storeOwnerId', and 'storeManagerUids' for authorization independence.",
+          "params": [
+            {
+              "name": "storeId",
+              "description": "Unique identifier of the owning Store."
+            },
+            {
+              "name": "storeInventoryId",
+              "description": "Unique identifier for the inventory record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/supplierStoreRequests/{supplierStoreRequestId}",
+        "definition": {
+          "entityName": "SupplierStoreRequest",
+          "schema": {
+            "$ref": "#/backend/entities/SupplierStoreRequest"
+          },
+          "description": "A top-level collection for managing connection requests between stores and wholesalers. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', 'wholesalerAdminUids', 'storeId', and 'storeOwnerId' for authorization independence, allowing both parties to view/manage their respective requests.",
+          "params": [
+            {
+              "name": "supplierStoreRequestId",
+              "description": "Unique identifier for the connection request."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/supplierStoreConnections/{supplierStoreConnectionId}",
+        "definition": {
+          "entityName": "SupplierStoreConnection",
+          "schema": {
+            "$ref": "#/backend/entities/SupplierStoreConnection"
+          },
+          "description": "A top-level collection for established connections between stores and wholesalers. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', 'wholesalerAdminUids', 'storeId', and 'storeOwnerId' for authorization independence.",
+          "params": [
+            {
+              "name": "supplierStoreConnectionId",
+              "description": "Unique identifier for the established connection."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "A top-level collection for orders placed by stores with wholesalers. Includes denormalized 'storeId', 'storeOwnerId', 'storeManagerUids', 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' for authorization independence for both participating parties.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier for the order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/orders/{orderId}/items/{orderItemId}",
+        "definition": {
+          "entityName": "OrderItem",
+          "schema": {
+            "$ref": "#/backend/entities/OrderItem"
+          },
+          "description": "A subcollection for individual items within an order. Includes denormalized 'storeId', 'storeOwnerId', 'storeManagerUids', 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' from the parent Order for authorization independence.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier of the parent Order."
+            },
+            {
+              "name": "orderItemId",
+              "description": "Unique identifier for the order item."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The proposed Firestore structure for Orderia is designed to ensure maximum security, scalability, and debuggability by strictly adhering to the core design principles, especially Authorization Independence and QAPs (Queries Are Not Filters).\n\n**Authorization Independence (CRITICAL) via Denormalization:**\nThis structure achieves Authorization Independence by explicitly denormalizing all necessary authorization context directly into each document. This eliminates the need for `get()` calls in security rules to check parent collection attributes or related documents for authorization. Instead, each document contains `ownerId`, `adminUids`, and/or `managerUids` fields for the relevant entities (Wholesaler, Store) that grant access. This strategy ensures:\n*   **Atomic Operations:** Documents can be created, updated, or deleted in batches or transactions without requiring reads of other documents for authorization, preventing deadlocks and simplifying logic.\n*   **Simplified Security Rules:** Rules become simpler, more explicit, and easier to debug, as they only need to evaluate `request.auth.uid` against the fields present in the `resource.data` of the document being accessed.\n*   **Clearer Intent:** The authorization intent is immediately visible within the document's data.\n\nExamples of denormalization for authorization:\n*   `Wholesaler` and `Store` documents will include `ownerId` (the UID of the primary owner) and `adminUids` (a list of UIDs with administrative access for that entity) or `managerUids` for stores. These fields are managed by the application logic during user/entity creation and updates.\n*   Top-level collaborative entities like `SupplierStoreRequest`, `SupplierStoreConnection`, and `Order` will denormalize the `ownerId` and relevant `adminUids` (or `managerUids`) from both the associated `Store` and `Wholesaler` entities. For example, an `Order` document will contain `storeId`, `storeOwnerId`, `storeManagerUids`, `wholesalerId`, `wholesalerOwnerId`, and `wholesalerAdminUids`. This allows direct authorization checks for both the store and wholesaler roles without `get()` operations.\n*   Documents in subcollections (e.g., `Product` under `Wholesaler`, `StoreInventory` under `Store`, `OrderItem` under `Order`) also include denormalized `ownerId` and `adminUids`/`managerUids` from their respective logical parents. This allows rules to evaluate access based on the document's own fields, even if it's part of a hierarchical path.\n\n**QAPs (Rules are not Filters) Support:**\nThis structure inherently supports QAPs by ensuring that security rules do not act as data filters. Instead, client-side queries are expected to include specific `where` clauses that correspond to the denormalized authorization fields. The security rules then only need to validate that `request.auth.uid` matches the requested authorization criteria within the document's fields. This means:\n*   **Efficient List Operations:** Clients perform targeted queries (e.g., `db.collection('orders').where('storeOwnerId', '==', currentUserUid)`). The rules then quickly verify `request.auth.uid == resource.data.storeOwnerId`, preventing broad, unfiltered reads and ensuring only authorized data is returned based on the query, not by filtering after a read.\n*   **Preventing Data Leakage:** Since every document carries its own authorization context, unauthorized data cannot be accidentally exposed through broad queries that rules might otherwise struggle to filter efficiently or correctly.\n\n**Structural Segregation:**\n*   **Hierarchical Paths for Owned Data:** `/wholesalers/{wholesalerId}/products`, `/stores/{storeId}/inventories` clearly segregate data based on its primary owner (wholesaler or store), simplifying access control to all documents within that hierarchy.\n*   **Top-Level Collections for Collaborative Entities:** `SupplierStoreRequest`, `SupplierStoreConnection`, and `Order` are placed as top-level collections. This allows for flexible querying by either party (`storeId` or `wholesalerId`) and simplifies QAPs for multi-party access, with denormalized authorization fields handling the actual permission checks.\n*   **Explicit State Modeling:** Entities like `SupplierStoreRequest` and `Order` use a single `status` field to represent their finite state, which simplifies rule logic compared to inferring state from multiple boolean flags.\n\n**Addressing "
+  }
+}
