@@ -28,16 +28,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 type PostItNote = {
     id: number;
@@ -136,6 +128,93 @@ const SalesChart = ({ data, dataKey }: { data: any[], dataKey: string }) => (
     </ResponsiveContainer>
 );
 
+const NoteForm = ({ note, onSave, onCancel }: { note: Partial<PostItNote> | null, onSave: (data: { text: string, color: 'yellow' | 'blue' | 'green' }) => void, onCancel: () => void }) => {
+    const [text, setText] = useState(note?.text || '');
+    const [color, setColor] = useState<'yellow' | 'blue' | 'green'>(note?.color || 'yellow');
+    const { toast } = useToast();
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!text) {
+            toast({ variant: 'destructive', title: "Το κείμενο δεν μπορεί να είναι κενό" });
+            return;
+        }
+        onSave({ text, color });
+    };
+
+    const dialogColors = {
+        yellow: 'bg-yellow-400/10',
+        blue: 'bg-blue-400/10',
+        green: 'bg-green-400/10',
+    };
+    
+    const colorRing = {
+        yellow: 'ring-yellow-500',
+        blue: 'ring-blue-500',
+        green: 'ring-green-500',
+    }
+
+    const colorBg = {
+        yellow: 'bg-yellow-400',
+        blue: 'bg-blue-400',
+        green: 'bg-green-400',
+    }
+    
+    const colorTextareaBg = {
+        yellow: 'bg-yellow-400/20 focus-visible:bg-yellow-400/30',
+        blue: 'bg-blue-400/20 focus-visible:bg-blue-400/30',
+        green: 'bg-green-400/20 focus-visible:bg-green-400/30',
+    }
+
+
+    return (
+        <form onSubmit={handleSubmit} className={cn("flex flex-col", dialogColors[color])}>
+            <DialogHeader className="p-6 pb-4">
+                <DialogTitle>{note?.id ? 'Επεξεργασία Σημείωσης' : 'Νέα Σημείωση'}</DialogTitle>
+                <DialogDescription>
+                    {note?.id ? 'Επεξεργαστείτε τη σημείωσή σας.' : 'Προσθέστε μια νέα σημείωση στον πίνακα ελέγχου.'}
+                </DialogDescription>
+            </DialogHeader>
+            <div className="p-6 pt-0 space-y-4 flex-1">
+                <Textarea 
+                    id="note-text" 
+                    name="text" 
+                    value={text} 
+                    onChange={(e) => setText(e.target.value)} 
+                    required 
+                    className={cn(
+                        "h-32 text-base resize-none border-black/20 focus-visible:ring-offset-0 focus-visible:ring-2", 
+                        colorTextareaBg[color],
+                        colorRing[color]
+                    )}
+                    placeholder="Γράψτε τη σημείωσή σας εδώ..."
+                />
+                <div className="space-y-2">
+                    <Label>Χρώμα</Label>
+                    <div className="flex gap-4 pt-2">
+                        {(['yellow', 'blue', 'green'] as const).map(c => (
+                             <button
+                                key={c}
+                                type="button"
+                                title={c.charAt(0).toUpperCase() + c.slice(1)}
+                                onClick={() => setColor(c)}
+                                className={cn(
+                                    'w-8 h-8 rounded-full transition-all duration-150 border-2 border-transparent',
+                                    colorBg[c],
+                                    color === c ? `ring-2 ring-offset-2 ring-offset-background ${colorRing[c]}` : 'scale-90 opacity-70 hover:opacity-100'
+                                )}
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+            <DialogFooter className="p-6 mt-auto bg-black/5">
+                <Button type="button" variant="ghost" onClick={onCancel}>Ακύρωση</Button>
+                <Button type="submit">Αποθήκευση</Button>
+            </DialogFooter>
+        </form>
+    );
+};
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -185,16 +264,8 @@ export default function AdminDashboardPage() {
     toast({ title: "Η σημείωση διαγράφηκε" });
   };
 
-  const handleSaveNote = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const text = formData.get("text") as string;
-    const color = formData.get("color") as 'yellow' | 'blue' | 'green';
-
-    if (!text) {
-        toast({ variant: 'destructive', title: "Το κείμενο δεν μπορεί να είναι κενό" });
-        return;
-    }
+  const handleSaveNote = (data: { text: string; color: 'yellow' | 'blue' | 'green' }) => {
+    const { text, color } = data;
 
     if (editingNote?.id) { // Editing
         setPostItNotes(prev => prev.map(note => note.id === editingNote.id ? { ...note, text, color } : note));
@@ -354,37 +425,18 @@ export default function AdminDashboardPage() {
           </Card>
         </div>
       </div>
-      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>{editingNote?.id ? 'Επεξεργασία Σημείωσης' : 'Νέα Σημείωση'}</DialogTitle>
-                <DialogDescription>
-                    {editingNote?.id ? 'Επεξεργαστείτε το κείμενο ή το χρώμα της σημείωσης.' : 'Προσθέστε μια νέα σημείωση στον πίνακα ελέγχου.'}
-                </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSaveNote} className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="note-text">Κείμενο</Label>
-                    <Textarea id="note-text" name="text" defaultValue={editingNote?.text || ''} required />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="note-color">Χρώμα</Label>
-                    <Select name="color" defaultValue={editingNote?.color || 'yellow'}>
-                        <SelectTrigger id="note-color">
-                            <SelectValue placeholder="Επιλέξτε χρώμα" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="yellow">Κίτρινο</SelectItem>
-                            <SelectItem value="blue">Μπλε</SelectItem>
-                            <SelectItem value="green">Πράσινο</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsNoteDialogOpen(false)}>Ακύρωση</Button>
-                    <Button type="submit">Αποθήκευση</Button>
-                </DialogFooter>
-            </form>
+       <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+        <DialogContent className="p-0 sm:max-w-md overflow-hidden">
+            {isNoteDialogOpen && (
+                <NoteForm 
+                    note={editingNote} 
+                    onSave={handleSaveNote} 
+                    onCancel={() => {
+                        setIsNoteDialogOpen(false);
+                        setEditingNote(null);
+                    }}
+                />
+            )}
         </DialogContent>
       </Dialog>
     </>
