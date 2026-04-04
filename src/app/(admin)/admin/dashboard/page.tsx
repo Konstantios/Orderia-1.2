@@ -34,6 +34,7 @@ import { collection, query, where, doc, serverTimestamp, orderBy, Timestamp } fr
 import type { Order, Wholesaler, Product, Warehouse, WholesalerStockItem, PostItNote as PostItNoteType } from "@/lib/types";
 import { isToday, isYesterday, format, subDays, isSameDay, startOfWeek, endOfWeek, subWeeks, isWithinInterval, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { el } from 'date-fns/locale';
+import { products as allProducts } from '@/lib/data';
 
 type PostItNote = WithId<PostItNoteType>;
 
@@ -207,13 +208,7 @@ export default function AdminDashboardPage() {
   }, [wholesaler, firestore]);
   const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 
-  // 3. Fetch Products, Warehouses, and Stock for Low Stock Items
-  const productsQuery = useMemoFirebase(() => {
-    if (!wholesaler || !firestore) return null;
-    return collection(firestore, 'wholesalers', wholesaler.id, 'products');
-  }, [wholesaler, firestore]);
-  const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
-
+  // 3. Fetch Warehouses and Stock for Low Stock Items
   const warehousesQuery = useMemoFirebase(() => {
     if (!wholesaler || !firestore) return null;
     return collection(firestore, 'wholesalers', wholesaler.id, 'warehouses');
@@ -320,10 +315,10 @@ export default function AdminDashboardPage() {
 
 
   const lowStockItems = useMemo(() => {
-    if (!stock || !products) return [];
+    if (!stock || !allProducts) return [];
     return stock
     .map(stockItem => {
-        const product = products.find(p => p.id === stockItem.productId);
+        const product = allProducts.find(p => p.id === stockItem.productId);
         if (!product) return null;
         const { quantity, idealStock } = stockItem;
         if (idealStock > 0 && quantity < idealStock * 0.4) {
@@ -338,7 +333,7 @@ export default function AdminDashboardPage() {
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a,b) => (a.currentStock/a.idealStock) - (b.currentStock/b.idealStock));
-  }, [stock, products]);
+  }, [stock]);
 
   const handleRoleChange = (role: string) => {
     if (role === 'store') {
@@ -430,7 +425,7 @@ export default function AdminDashboardPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoadingProducts || isLoadingStock ? (
+                    {isLoadingStock ? (
                          <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin"/></div>
                     ) : lowStockItems.length > 0 ? (
                         <Accordion type="multiple" className="w-full space-y-2">
@@ -569,3 +564,5 @@ export default function AdminDashboardPage() {
     </>
   )
 }
+
+    
