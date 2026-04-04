@@ -71,9 +71,10 @@ export default function AdminTeamPage() {
     }, [firestore, wholesaler]);
     const { data: pendingRequests, isLoading: isLoadingRequests } = useCollection<any>(requestsQuery);
 
-    // 3. Fetch approved requests to build team list
+    // 3. Fetch approved requests to build a lookup map for user details
     const approvedRequestsQuery = useMemoFirebase(() => {
         if (!firestore || !wholesaler) return null;
+        // Fetch all approved requests to get user details (name, email)
         return query(collection(firestore, 'joinRequests'), where("businessId", "==", wholesaler.id), where("status", "==", "approved"));
     }, [firestore, wholesaler]);
     const { data: approvedRequests, isLoading: isLoadingApproved } = useCollection<any>(approvedRequestsQuery);
@@ -88,17 +89,29 @@ export default function AdminTeamPage() {
             role: 'Διαχειριστής',
         };
 
-        const members = (approvedRequests || []).map(req => ({
-            id: req.requesterUid,
-            name: req.requesterName,
-            email: req.requesterEmail,
-            role: 'Μέλος',
-        }));
-        
-        const memberUids = new Set(members.map(m => m.id));
-        if (memberUids.has(owner.id)) {
-            return members.map(m => m.id === owner.id ? {...m, role: 'Διαχειριστής'} : m);
+        // Create a map from UID to user details from all approved requests for this business
+        const userDetailsMap = new Map();
+        (approvedRequests || []).forEach(req => {
+            userDetailsMap.set(req.requesterUid, { name: req.requesterName, email: req.requesterEmail });
+        });
+
+        // Add owner details to the map if not already there, to ensure they appear if they came from a join request somehow
+        if (!userDetailsMap.has(wholesaler.ownerId)) {
+            userDetailsMap.set(wholesaler.ownerId, { name: wholesaler.ownerName || 'Ιδιοκτήτης', email: wholesaler.email });
         }
+        
+        // Build the team list from the definitive source of truth: wholesaler.adminUids
+        const members = (wholesaler.adminUids || [])
+            .filter(uid => uid !== wholesaler.ownerId) // Exclude owner, as they are handled separately and added first
+            .map(uid => {
+                const details = userDetailsMap.get(uid);
+                return {
+                    id: uid,
+                    name: details?.name || 'Μέλος χωρίς όνομα',
+                    email: details?.email || 'N/A',
+                    role: 'Μέλος',
+                };
+            });
 
         return [owner, ...members];
     }, [wholesaler, approvedRequests]);

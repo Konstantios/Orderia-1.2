@@ -71,7 +71,7 @@ export default function TeamPage() {
     }, [firestore, store]);
     const { data: pendingRequests, isLoading: isLoadingRequests } = useCollection<any>(requestsQuery);
 
-    // 3. Fetch approved requests to build team list
+    // 3. Fetch approved requests to build a lookup map for user details
     const approvedRequestsQuery = useMemoFirebase(() => {
         if (!firestore || !store) return null;
         return query(collection(firestore, 'joinRequests'), where("businessId", "==", store.id), where("status", "==", "approved"));
@@ -88,17 +88,26 @@ export default function TeamPage() {
             role: 'Ιδιοκτήτης',
         };
 
-        const members = (approvedRequests || []).map(req => ({
-            id: req.requesterUid,
-            name: req.requesterName,
-            email: req.requesterEmail,
-            role: 'Υπάλληλος',
-        }));
+        const userDetailsMap = new Map();
+        (approvedRequests || []).forEach(req => {
+            userDetailsMap.set(req.requesterUid, { name: req.requesterName, email: req.requesterEmail });
+        });
 
-        const memberUids = new Set(members.map(m => m.id));
-        if (memberUids.has(owner.id)) {
-             return members.map(m => m.id === owner.id ? {...m, role: 'Ιδιοκτήτης'} : m);
+        if (!userDetailsMap.has(store.ownerId)) {
+            userDetailsMap.set(store.ownerId, { name: store.ownerName, email: store.email });
         }
+        
+        const members = (store.managerUids || [])
+            .filter(uid => uid !== store.ownerId)
+            .map(uid => {
+                const details = userDetailsMap.get(uid);
+                return {
+                    id: uid,
+                    name: details?.name || 'Μέλος χωρίς όνομα',
+                    email: details?.email || 'N/A',
+                    role: 'Υπάλληλος',
+                };
+            });
 
         return [owner, ...members];
     }, [store, approvedRequests]);
