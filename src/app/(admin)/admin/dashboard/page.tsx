@@ -13,9 +13,11 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell } from 'recharts';
 import { cn } from "@/lib/utils"
 import { ArrowDown, ArrowUp } from "lucide-react"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useState } from "react";
 
 const kpis = [
   { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
@@ -23,6 +25,22 @@ const kpis = [
   { title: "Προϊόντα σε Έλλειψη", value: adminDashboardData.lowStockItems, icon: Icons.warehouse },
   { title: "Νέοι Πελάτες", value: adminDashboardData.newCustomers, icon: Icons.customers },
 ]
+
+const dashboardWidgets = ["Σημερινές Παραγγελίες", "Εκκρεμείς Παραγγελίες", "Προϊόντα σε Έλλειψη"];
+const mainKpis = kpis.filter(kpi => dashboardWidgets.includes(kpi.title));
+
+const postItNotes = [
+    { id: 1, text: 'Να γίνει τηλεφώνημα στον πελάτη Χ για το τιμολόγιο.', color: 'yellow' },
+    { id: 2, text: 'Ο νέος προμηθευτής για αλεύρι φτάνει την Παρασκευή.', color: 'blue' },
+    { id: 3, text: 'Check new product samples for next week.', color: 'green' },
+];
+
+const noteColors: { [key: string]: string } = {
+    yellow: 'bg-yellow-400/10 border-yellow-500/30',
+    blue: 'bg-blue-400/10 border-blue-500/30',
+    green: 'bg-green-400/10 border-green-500/30'
+}
+
 
 // New Dummy Data
 const dailySales = [
@@ -79,7 +97,7 @@ const renderSalesTable = (data: {period: string, items: number, change: number}[
 
 const SalesChart = ({ data, dataKey }: { data: any[], dataKey: string }) => (
     <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data}>
+        <BarChart data={data} margin={{ top: 20 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="period" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false}/>
             <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`}/>
@@ -89,7 +107,16 @@ const SalesChart = ({ data, dataKey }: { data: any[], dataKey: string }) => (
                     border: "1px solid hsl(var(--border))",
                 }}
             />
-            <Bar dataKey={dataKey} fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey={dataKey} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey={dataKey} position="top" className="fill-foreground" fontSize={12} />
+                {data.map((entry, index) => {
+                    const prevEntry = index > 0 ? data[index - 1] : null;
+                    const color = !prevEntry || entry[dataKey] >= prevEntry[dataKey]
+                        ? '#22c55e' // text-green-500
+                        : '#ef4444'; // text-red-500
+                    return <Cell key={`cell-${index}`} fill={color} />;
+                })}
+            </Bar>
         </BarChart>
     </ResponsiveContainer>
 );
@@ -117,69 +144,92 @@ export default function AdminDashboardPage() {
             </Tabs>
       </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-        {kpis.map(kpi => (
-          <Card key={kpi.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-              <kpi.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        {/* Left Column */}
+        <div className="lg:col-span-1 space-y-6">
+          {mainKpis.map(kpi => (
+            <Card key={kpi.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
+                <kpi.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{kpi.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+           <Card>
+            <CardHeader><CardTitle>Post-it</CardTitle></CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpi.value}</div>
+                <Accordion type="multiple" className="w-full space-y-2">
+                    {postItNotes.map(note => (
+                        <AccordionItem key={note.id} value={`item-${note.id}`} className={cn("rounded-lg border", noteColors[note.color])}>
+                            <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline text-left">
+                                {note.text.substring(0, 40)}{note.text.length > 40 ? '...' : ''}
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pt-0 pb-3 text-sm text-muted-foreground">
+                               {note.text}
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
             </CardContent>
           </Card>
-        ))}
+        </div>
+
+        {/* Right Column */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+                <CardTitle>Ανάλυση Πωλήσεων</CardTitle>
+                <CardDescription>Συγκριτικά δεδομένα πωλήσεων ανά χρονική περίοδο.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="days">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                        <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                        <TabsTrigger value="months">Μήνες</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="days" className="mt-4">
+                        {renderSalesTable(dailySales)}
+                    </TabsContent>
+                    <TabsContent value="weeks" className="mt-4">
+                        {renderSalesTable(weeklySales)}
+                    </TabsContent>
+                    <TabsContent value="months" className="mt-4">
+                        {renderSalesTable(monthlySales)}
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+                <CardTitle>Γράφημα Προόδου</CardTitle>
+                <CardDescription>Οπτικοποίηση της προόδου των πωλήσεών σας.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="days">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                        <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                        <TabsTrigger value="months">Μήνες</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="days" className="mt-4">
+                        <SalesChart data={dailySales.slice().reverse()} dataKey="items" />
+                    </TabsContent>
+                    <TabsContent value="weeks" className="mt-4">
+                        <SalesChart data={weeklySales.slice().reverse()} dataKey="items" />
+                    </TabsContent>
+                    <TabsContent value="months" className="mt-4">
+                        <SalesChart data={monthlySales.slice().reverse()} dataKey="items" />
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-      
-      <Card>
-        <CardHeader>
-            <CardTitle>Ανάλυση Πωλήσεων</CardTitle>
-            <CardDescription>Συγκριτικά δεδομένα πωλήσεων ανά χρονική περίοδο.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <Tabs defaultValue="days">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="days">Ημέρες</TabsTrigger>
-                    <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
-                    <TabsTrigger value="months">Μήνες</TabsTrigger>
-                </TabsList>
-                <TabsContent value="days" className="mt-4">
-                    {renderSalesTable(dailySales)}
-                </TabsContent>
-                <TabsContent value="weeks" className="mt-4">
-                    {renderSalesTable(weeklySales)}
-                </TabsContent>
-                <TabsContent value="months" className="mt-4">
-                    {renderSalesTable(monthlySales)}
-                </TabsContent>
-            </Tabs>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-            <CardTitle>Γράφημα Προόδου</CardTitle>
-            <CardDescription>Οπτικοποίηση της προόδου των πωλήσεών σας.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <Tabs defaultValue="days">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="days">Ημέρες</TabsTrigger>
-                    <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
-                    <TabsTrigger value="months">Μήνες</TabsTrigger>
-                </TabsList>
-                <TabsContent value="days" className="mt-4">
-                    <SalesChart data={dailySales.slice().reverse()} dataKey="items" />
-                </TabsContent>
-                <TabsContent value="weeks" className="mt-4">
-                    <SalesChart data={weeklySales.slice().reverse()} dataKey="items" />
-                </TabsContent>
-                <TabsContent value="months" className="mt-4">
-                    <SalesChart data={monthlySales.slice().reverse()} dataKey="items" />
-                </TabsContent>
-            </Tabs>
-        </CardContent>
-      </Card>
     </>
   )
 }
