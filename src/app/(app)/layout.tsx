@@ -17,7 +17,6 @@ const navItems = [
   { href: '/orders/new', label: 'Παραγγελία', icon: Icons.plus },
   { href: '/inventory', label: 'Αποθήκη', icon: Icons.inventory },
   { href: '/orders/history', label: 'Ιστορικό', icon: Icons.history },
-  { href: '/team', label: 'Ομάδα', icon: Icons.team },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -69,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto p-4 pb-20 md:px-6 md:pt-6">{children}</main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background/95 backdrop-blur-sm">
-        <div className="grid h-16 grid-cols-6 items-center justify-items-center">
+        <div className="grid h-16 grid-cols-5 items-center justify-items-center">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={label}

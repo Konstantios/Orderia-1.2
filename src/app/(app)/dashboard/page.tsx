@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Icons } from '@/components/icons';
-import { Bell, History, Package, ShoppingCart } from 'lucide-react';
+import { Bell, History, Package, ShoppingCart, Users } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 
@@ -35,6 +35,13 @@ const menuItems = [
     href: '/orders/history',
     icon: History,
     color: 'text-orange-400',
+  },
+  {
+    title: 'Διαχείριση Ομάδας',
+    description: 'Προσκαλέστε μέλη και ορίστε δικαιώματα',
+    href: '/team',
+    icon: Users,
+    color: 'text-purple-400',
   },
   {
     title: 'Ειδοποιήσεις',
