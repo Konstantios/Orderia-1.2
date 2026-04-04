@@ -8,14 +8,16 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Logo } from '@/components/logo';
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { initiateAnonymousSignIn, initiateEmailSignUp, initiateEmailSignIn, useAuth } from '@/firebase';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const auth = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,14 +45,17 @@ export default function LoginPage() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (email === 'admin@frozenfoods.gr' && password === 'fr1') {
+      initiateEmailSignIn(auth, email, password);
       router.push('/admin/dashboard');
     } else if (email === 'user@igevsi.gr' && password === 'g1') {
+      initiateEmailSignIn(auth, email, password);
       router.push('/dashboard');
     } else {
+      initiateAnonymousSignIn(auth);
       toast({
         variant: 'destructive',
         title: 'Λάθος Στοιχεία Σύνδεσης',
-        description: 'Ο συνδυασμός email και κωδικού δεν είναι σωστός.',
+        description: 'Ο συνδυασμός email και κωδικού δεν είναι σωστός. Συνδέεστε ως ανώνυμος χρήστης.',
       });
     }
   };
@@ -84,6 +89,10 @@ export default function LoginPage() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const businessName = formData.get('businessName');
+    const email = formData.get('adminEmail') as string;
+    const password = formData.get('adminPassword') as string;
+
+    initiateEmailSignUp(auth, email, password);
 
     toast({
         title: 'Η Επιχείρηση Καταχωρήθηκε!',
