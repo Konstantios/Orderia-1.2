@@ -1,0 +1,229 @@
+'use client';
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge";
+import { MoreHorizontal, PlusCircle, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+
+const teamMembersData = [
+    { id: '1', name: 'Φώτης Γεωργίου', email: 'store@tastebakery.gr', role: 'Ιδιοκτήτης' },
+    { id: '2', name: 'Ελένη Παπαδάκη', email: 'eleni@tastebakery.gr', role: 'Υπάλληλος' },
+]
+
+const pendingRequestsData = [
+    { id: 'req1', name: 'Κώστας Νικολάου', email: 'k.nikolaou@email.com' },
+]
+
+export default function TeamPage() {
+    const { toast } = useToast();
+    const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+    const [teamMembers, setTeamMembers] = useState(teamMembersData);
+    const [pendingRequests, setPendingRequests] = useState(pendingRequestsData);
+
+    const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const email = formData.get('email') as string;
+        const name = formData.get('name') as string;
+        const role = formData.get('role') as string;
+
+        toast({
+            title: "Η πρόσκληση στάλθηκε!",
+            description: `Ο χρήστης ${name} (${email}) έχει προσκληθεί ως ${role}.`,
+        });
+
+        setIsInviteDialogOpen(false); // Close the dialog
+    };
+
+    const handleRequest = (requestId: string, accepted: boolean) => {
+        const request = pendingRequests.find(r => r.id === requestId);
+        if (!request) return;
+
+        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+
+        if(accepted) {
+             setTeamMembers(prev => [...prev, { id: `user-${Date.now()}`, name: request.name, email: request.email, role: 'Υπάλληλος' }])
+             toast({
+                title: "Το Αίτημα Εγκρίθηκε",
+                description: `Ο χρήστης ${request.name} έχει προστεθεί στην ομάδα.`,
+            });
+            // In a real app, you would add the user to the team here.
+        } else {
+            toast({
+                variant: 'destructive',
+                title: "Το Αίτημα Απορρίφθηκε",
+                description: `Το αίτημα του χρήστη ${request.name} έχει απορριφθεί.`,
+            });
+        }
+    }
+
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-lg font-semibold md:text-2xl">Διαχείριση Ομάδας</h1>
+            </div>
+
+            {pendingRequests.length > 0 && (
+                 <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>Εκκρεμή Αιτήματα</CardTitle>
+                        <CardDescription>
+                            Εγκρίνετε ή απορρίψτε τα αιτήματα χρηστών για συμμετοχή στην ομάδα σας.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {pendingRequests.map((request) => (
+                            <div key={request.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                <div>
+                                    <p className="font-semibold">{request.name}</p>
+                                    <p className="text-sm text-muted-foreground">{request.email}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRequest(request.id, false)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="outline" size="icon" className="text-green-500 hover:text-green-500" onClick={() => handleRequest(request.id, true)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Μέλη Ομάδας</CardTitle>
+                        <CardDescription>
+                            Προσκαλέστε και διαχειριστείτε τα μέλη της ομάδας που έχουν πρόσβαση στο κατάστημα.
+                        </CardDescription>
+                    </div>
+                     <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Πρόσκληση Μέλους
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <form onSubmit={handleInvite}>
+                                <DialogHeader>
+                                    <DialogTitle>Πρόσκληση Νέου Μέλους</DialogTitle>
+                                    <DialogDescription>
+                                        Συμπληρώστε τα στοιχεία του νέου μέλους για να του στείλετε μια πρόσκληση.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="name" className="text-right">
+                                            Όνομα
+                                        </Label>
+                                        <Input id="name" name="name" required className="col-span-3" />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="email" className="text-right">
+                                            Email
+                                        </Label>
+                                        <Input id="email" name="email" type="email" required className="col-span-3" />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="role" className="text-right">
+                                            Ρόλος
+                                        </Label>
+                                        <Select name="role" required defaultValue="Υπάλληλος">
+                                            <SelectTrigger className="col-span-3">
+                                                <SelectValue placeholder="Επιλέξτε ρόλο" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Ιδιοκτήτης">Ιδιοκτήτης</SelectItem>
+                                                <SelectItem value="Υπάλληλος">Υπάλληλος</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button type="submit">Αποστολή Πρόσκλησης</Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </CardHeader>
+                <CardContent>
+                   <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Ονοματεπώνυμο</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Ρόλος</TableHead>
+                                <TableHead className="text-right">Ενέργειες</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {teamMembers.map((member) => (
+                                <TableRow key={member.email}>
+                                    <TableCell className="font-medium">{member.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{member.email}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={member.role === 'Ιδιοκτήτης' ? 'default' : 'secondary'}>
+                                            {member.role}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                         <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem>Επεξεργασία</DropdownMenuItem>
+                                                <DropdownMenuItem className="text-destructive">Αφαίρεση</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                   </Table>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
