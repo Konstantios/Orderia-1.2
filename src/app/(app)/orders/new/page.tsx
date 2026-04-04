@@ -8,13 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { products as allProducts, customers, orderHistory } from '@/lib/data';
-import type { OrderItem, Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
+import type { OrderItem, Store, CustomerInventoryItem, StoreProductConfiguration, Wholesaler } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 
 const customer = customers[0];
 const customerProducts = allProducts.filter(p => customer.products.some(cp => cp.productId === p.id));
@@ -199,7 +199,11 @@ export default function NewOrderPage() {
     }
   }, [searchParams, isSuggestionModeActive, isCalculatingSuggestions, isDataLoading, orderItems.length, toggleSuggestionMode]);
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
+    if (!firestore || !user || !store) {
+        toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν είναι δυνατή η υποβολή, ο χρήστης ή το κατάστημα δεν βρέθηκε." });
+        return;
+    }
     if (orderItems.length === 0) {
       toast({
         variant: 'destructive',
@@ -208,17 +212,59 @@ export default function NewOrderPage() {
       });
       return;
     }
-    toast({
-      title: 'Η Παραγγελία Υποβλήθηκε!',
-      description: 'Η παραγγελία σας υποβλήθηκε με επιτυχία.',
-    });
-    setOrderItems([]);
-    setNotes('');
-    setIsSuggestionModeActive(false);
-    // Clear localStorage after submission
-    localStorage.removeItem('orderNotes');
-    localStorage.removeItem('orderItems');
-    router.push('/dashboard');
+
+    try {
+        // Find the 'Frozen Foods' wholesaler to link the order
+        const wholesalersRef = collection(firestore, 'wholesalers');
+        const q = query(wholesalersRef, where("companyName", "==", "Frozen Foods"));
+        const wholesalerSnapshot = await getDocs(q);
+
+        if (wholesalerSnapshot.empty) {
+            toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν βρέθηκε ο προμηθευτής 'Frozen Foods'." });
+            return;
+        }
+        const wholesalerDoc = wholesalerSnapshot.docs[0];
+        const wholesaler = { id: wholesalerDoc.id, ...wholesalerDoc.data() } as Wholesaler;
+
+        // Construct the new order object with all necessary fields
+        const newOrderData = {
+            storeId: store.id,
+            customerName: store.businessName,
+            wholesalerId: wholesaler.id,
+            date: new Date(),
+            status: 'Εκκρεμής',
+            notes: notes || '',
+            items: orderItems,
+            // Denormalized auth fields for security rules
+            storeOwnerId: store.ownerId,
+            storeManagerUids: store.managerUids || [store.ownerId],
+            wholesalerOwnerId: wholesaler.ownerId,
+            wholesalerAdminUids: wholesaler.adminUids,
+        };
+        
+        await addDoc(collection(firestore, "orders"), newOrderData);
+        
+        toast({
+          title: 'Η Παραγγελία Υποβλήθηκε!',
+          description: 'Η παραγγελία σας υποβλήθηκε με επιτυχία.',
+        });
+
+        // Reset state and clear storage
+        setOrderItems([]);
+        setNotes('');
+        setIsSuggestionModeActive(false);
+        localStorage.removeItem('orderNotes');
+        localStorage.removeItem('orderItems');
+        router.push('/dashboard');
+
+    } catch (error) {
+        console.error("Error submitting order: ", error);
+        toast({
+            variant: "destructive",
+            title: "Σφάλμα Υποβολής",
+            description: "Δεν ήταν δυνατή η υποβολή της παραγγελίας. Ελέγξτε τους κανόνες ασφαλείας.",
+        });
+    }
   };
 
   const orderTotals = useMemo(() => {

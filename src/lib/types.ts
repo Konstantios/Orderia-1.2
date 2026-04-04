@@ -79,7 +79,7 @@ export interface OrderItem {
 export interface Order {
   id: string;
   customerName: string;
-  date: string;
+  date: any;
   items: OrderItem[];
   status: 'Εκκρεμής' | 'Ολοκληρωμένη' | 'Απεσταλμένη';
   notes?: string;
