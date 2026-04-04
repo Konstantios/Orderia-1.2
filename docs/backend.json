@@ -74,6 +74,26 @@
         "orderAcceptanceHours"
       ]
     },
+    "Warehouse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Warehouse",
+      "type": "object",
+      "description": "Represents a physical warehouse belonging to a wholesaler.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the warehouse (e.g., 'Main Warehouse', 'Freezer Section')."
+        },
+        "wholesalerId": {
+          "type": "string",
+          "description": "The ID of the wholesaler this warehouse belongs to."
+        }
+      },
+      "required": [
+        "name",
+        "wholesalerId"
+      ]
+    },
     "Store": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Store",
@@ -334,27 +354,27 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "WholesalerInventory",
       "type": "object",
-      "description": "Records the current stock level of a product in the wholesaler's own warehouse, enabling stock tracking and low-stock alerts.",
+      "description": "Records the current stock level of a product in a specific warehouse for a wholesaler.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the WholesalerInventory entity."
-        },
         "wholesalerId": {
           "type": "string",
-          "description": "Reference to the Wholesaler whose inventory this record belongs to. (Relationship: Wholesaler 1:N WholesalerInventory)"
+          "description": "Reference to the Wholesaler whose inventory this record belongs to."
+        },
+        "warehouseId": {
+          "type": "string",
+          "description": "Reference to the Warehouse where the stock is located."
         },
         "productId": {
           "type": "string",
-          "description": "Reference to the Product whose stock level is being recorded. (Relationship: Product 1:N WholesalerInventory)"
+          "description": "Reference to the Product whose stock level is being recorded."
         },
         "currentStock": {
           "type": "number",
           "description": "The current quantity of the product in the wholesaler's inventory."
         },
-        "lowStockThreshold": {
+        "idealStock": {
           "type": "number",
-          "description": "The quantity below which a low stock alert should be triggered for this product."
+          "description": "The ideal quantity of this product to keep in stock."
         },
         "lastUpdated": {
           "type": "string",
@@ -363,53 +383,12 @@
         }
       },
       "required": [
-        "id",
         "wholesalerId",
+        "warehouseId",
         "productId",
         "currentStock",
-        "lowStockThreshold",
+        "idealStock",
         "lastUpdated"
-      ]
-    },
-    "WholesalerInventoryLog": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "WholesalerInventoryLog",
-      "type": "object",
-      "description": "Tracks all changes (inflows, outflows, adjustments) to a specific wholesaler's product inventory for auditing and historical analysis.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the WholesalerInventoryLog entity."
-        },
-        "wholesalerInventoryId": {
-          "type": "string",
-          "description": "Reference to the specific WholesalerInventory record this log entry pertains to. (Relationship: WholesalerInventory 1:N WholesalerInventoryLog)"
-        },
-        "changeType": {
-          "type": "string",
-          "description": "Describes the type of inventory change (e.g., 'inflow' for new stock, 'outflow' for shipped orders, 'adjustment' for corrections)."
-        },
-        "quantityChange": {
-          "type": "number",
-          "description": "The quantity by which the stock level changed (positive for increases, negative for decreases)."
-        },
-        "timestamp": {
-          "type": "string",
-          "description": "The date and time when the inventory change occurred.",
-          "format": "date-time"
-        },
-        "reason": {
-          "type": "string",
-          "description": "A brief description or reason for the inventory change (e.g., 'delivery received', 'customer order fulfilled', 'manual correction')."
-        }
-      },
-      "required": [
-        "id",
-        "wholesalerInventoryId",
-        "changeType",
-        "quantityChange",
-        "timestamp",
-        "reason"
       ]
     },
     "Order": {
@@ -542,45 +521,45 @@
         }
       },
       {
-        "path": "/wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}",
+        "path": "/wholesalers/{wholesalerId}/warehouses/{warehouseId}",
         "definition": {
-          "entityName": "WholesalerInventory",
+          "entityName": "Warehouse",
           "schema": {
-            "$ref": "#/backend/entities/WholesalerInventory"
+            "$ref": "#/backend/entities/Warehouse"
           },
-          "description": "A subcollection for tracking the stock levels of products in a wholesaler's warehouse. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' for authorization independence.",
+          "description": "A subcollection for warehouses owned by a specific wholesaler.",
           "params": [
             {
               "name": "wholesalerId",
               "description": "Unique identifier of the owning Wholesaler."
             },
             {
-              "name": "wholesalerInventoryId",
-              "description": "Unique identifier for the inventory record."
+              "name": "warehouseId",
+              "description": "Unique identifier for the warehouse."
             }
           ]
         }
       },
       {
-        "path": "/wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}/logs/{wholesalerInventoryLogId}",
+        "path": "/wholesalers/{wholesalerId}/warehouses/{warehouseId}/inventories/{inventoryId}",
         "definition": {
-          "entityName": "WholesalerInventoryLog",
+          "entityName": "WholesalerInventory",
           "schema": {
-            "$ref": "#/backend/entities/WholesalerInventoryLog"
+            "$ref": "#/backend/entities/WholesalerInventory"
           },
-          "description": "A subcollection for logging inventory changes for a specific wholesaler's product. Includes denormalized 'wholesalerId', 'wholesalerOwnerId', and 'wholesalerAdminUids' from the parent wholesaler and inventory for authorization independence.",
+          "description": "A subcollection for tracking product stock levels within a specific warehouse. The inventoryId should typically be the productId.",
           "params": [
             {
               "name": "wholesalerId",
               "description": "Unique identifier of the owning Wholesaler."
             },
             {
-              "name": "wholesalerInventoryId",
-              "description": "Unique identifier for the parent WholesalerInventory record."
+              "name": "warehouseId",
+              "description": "Unique identifier for the warehouse."
             },
             {
-              "name": "wholesalerInventoryLogId",
-              "description": "Unique identifier for the inventory log entry."
+              "name": "inventoryId",
+              "description": "Unique identifier for the inventory record, usually the product ID."
             }
           ]
         }

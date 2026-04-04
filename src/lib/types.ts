@@ -56,7 +56,6 @@ export interface Order {
 }
 
 export interface WholesalerStockItem {
-  productId: string;
   quantity: number;
   idealStock: number;
   lastAction?: {
@@ -64,6 +63,13 @@ export interface WholesalerStockItem {
     value: number;
   };
 }
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  wholesalerId: string;
+}
+
 
 export interface AdminDashboardData {
   todayOrders: number;

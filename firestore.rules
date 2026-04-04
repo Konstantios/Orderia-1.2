@@ -147,34 +147,26 @@ service cloud.firestore {
         allow update: if isExistingWholesalerMember(resource.data) && request.resource.data.wholesalerId == resource.data.wholesalerId;
         allow delete: if isExistingWholesalerMember(resource.data);
       }
-
+      
       /**
-       * @description A wholesaler's product inventory records.
-       * @path /wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}
-       * @allow (get) An authenticated member of the parent wholesaler.
-       * @deny (get) A user from a different wholesaler.
+       * @description A wholesaler's physical warehouses.
+       * @path /wholesalers/{wholesalerId}/warehouses/{warehouseId}
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
-      match /inventories/{wholesalerInventoryId} {
-        allow get: if isWholesalerMember(resource.data);
-        allow list: if canAccessWholesalerSubcollection(wholesalerId);
+      match /warehouses/{warehouseId} {
+        allow list, get: if canAccessWholesalerSubcollection(wholesalerId);
         allow create: if canAccessWholesalerSubcollection(wholesalerId) && request.resource.data.wholesalerId == wholesalerId;
-        allow update: if isExistingWholesalerMember(resource.data) && request.resource.data.wholesalerId == resource.data.wholesalerId;
-        allow delete: if isExistingWholesalerMember(resource.data);
+        allow update, delete: if isExistingWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data);
 
         /**
-         * @description Logs of changes to a wholesaler's inventory.
-         * @path /wholesalers/{wholesalerId}/inventories/{wholesalerInventoryId}/logs/{logId}
-         * @allow (create) An authenticated member of the grandparent wholesaler.
-         * @deny (delete) Logs are immutable and cannot be deleted.
-         * @principle Deeply nested subcollection access is still governed by the top-level parent entity.
+         * @description Inventory records for products within a specific warehouse.
+         * @path /wholesalers/{wholesalerId}/warehouses/{warehouseId}/inventories/{inventoryId}
+         * @principle Access is granted based on membership in the grandparent wholesaler entity.
          */
-        match /logs/{logId} {
-          allow get: if isWholesalerMember(resource.data);
-          allow list: if canAccessWholesalerSubcollection(wholesalerId);
-          allow create: if canAccessWholesalerSubcollection(wholesalerId);
-          allow update: if false;
-          allow delete: if false;
+        match /inventories/{inventoryId} {
+            allow list, get: if canAccessWholesalerSubcollection(wholesalerId);
+            allow create, update: if canAccessWholesalerSubcollection(wholesalerId);
+            allow delete: if canAccessWholesalerSubcollection(wholesalerId);
         }
       }
     }
