@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { products as allProducts, customers } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Star, Loader2 } from 'lucide-react';
+import { Star, Loader2, Minus, Plus } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
@@ -211,27 +211,45 @@ export default function InventoryPage() {
                                                             </div>
                                                         </div>
                                                         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                                            <div className={cn('rounded-lg border p-2 flex flex-col justify-center', getStockColor(currentStock, idealStock))}>
-                                                                <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
-                                                                <Input
-                                                                    type="number"
-                                                                    defaultValue={currentStock}
-                                                                    onBlur={(e) => handleStockChange(id, e.target.value)}
-                                                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                    className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                                    min="0"
-                                                                />
+                                                            <div className={cn('rounded-lg border p-2 flex flex-col justify-center items-center', getStockColor(currentStock, idealStock))}>
+                                                                <p className="text-xs font-semibold uppercase mb-1">ΑΠΟΘΕΜΑ</p>
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleStockChange(id, String(currentStock - 1))}>
+                                                                        <Minus className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Input
+                                                                        key={`stock-${id}-${currentStock}`}
+                                                                        type="number"
+                                                                        defaultValue={currentStock}
+                                                                        onBlur={(e) => handleStockChange(id, e.target.value)}
+                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                        min="0"
+                                                                    />
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleStockChange(id, String(currentStock + 1))}>
+                                                                        <Plus className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
                                                             </div>
-                                                            <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
-                                                                <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
-                                                                <Input
-                                                                    type="number"
-                                                                    defaultValue={idealStock}
-                                                                    onBlur={(e) => handleIdealStockChange(id, e.target.value)}
-                                                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                    className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                                    min="0"
-                                                                />
+                                                            <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center items-center">
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">ΙΔΑΝΙΚΟ</p>
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleIdealStockChange(id, String(idealStock - 1))}>
+                                                                        <Minus className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Input
+                                                                        key={`ideal-${id}-${idealStock}`}
+                                                                        type="number"
+                                                                        defaultValue={idealStock}
+                                                                        onBlur={(e) => handleIdealStockChange(id, e.target.value)}
+                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                        min="0"
+                                                                    />
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleIdealStockChange(id, String(idealStock + 1))}>
+                                                                        <Plus className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
                                                             </div>
                                                             <div className="rounded-lg bg-muted/30 p-2">
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
