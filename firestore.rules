@@ -30,12 +30,12 @@ service cloud.firestore {
 
     /**
      * Checks if the authenticated user is a member (owner or admin) of a Wholesaler.
-     * This is robust against the 'adminUids' field not existing.
+     * This is robust against the 'adminUids' field not existing or not being a list.
      */
     function isWholesalerMember(docData) {
       return isSignedIn() && (
         request.auth.uid == docData.ownerId ||
-        ('adminUids' in docData && request.auth.uid in docData.adminUids)
+        ('adminUids' in docData && docData.adminUids is list && request.auth.uid in docData.adminUids)
       );
     }
     
@@ -48,12 +48,12 @@ service cloud.firestore {
 
     /**
      * Checks if the authenticated user is a member (owner or manager) of a Store.
-     * This is robust against the 'managerUids' field not existing.
+     * This is robust against the 'managerUids' field not existing or not being a list.
      */
     function isStoreMember(docData) {
       return isSignedIn() && (
         request.auth.uid == docData.ownerId ||
-        ('managerUids' in docData && request.auth.uid in docData.managerUids)
+        ('managerUids' in docData && docData.managerUids is list && request.auth.uid in docData.managerUids)
       );
     }
 
