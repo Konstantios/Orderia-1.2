@@ -84,6 +84,8 @@ export interface Order {
   status: 'Εκκρεμής' | 'Ολοκληρωμένη' | 'Απεσταλμένη';
   notes?: string;
   supplierNotes?: string;
+  wholesalerId?: string;
+  storeId?: string;
 }
 
 export interface WholesalerStockItem {
@@ -106,6 +108,15 @@ export interface Warehouse {
   wholesalerId: string;
   ownerId: string;
   adminUids: string[];
+}
+
+export interface PostItNote {
+    text: string;
+    color: 'yellow' | 'blue' | 'green';
+    createdAt: any; // Using `any` for serverTimestamp()
+    wholesalerId: string;
+    ownerId: string;
+    adminUids: string[];
 }
 
 

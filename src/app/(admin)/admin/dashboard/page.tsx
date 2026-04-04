@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Icons } from "@/components/icons"
-import { adminDashboardData, products, wholesalerStock } from "@/lib/data"
 import {
   Table,
   TableBody,
@@ -15,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell } from 'recharts';
 import { cn } from "@/lib/utils"
-import { ArrowDown, ArrowUp, Edit, PlusCircle, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Edit, PlusCircle, Trash2, Loader2 } from "lucide-react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,50 +29,19 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, WithId } from "@/firebase";
+import { collection, query, where, doc, serverTimestamp, orderBy, Timestamp } from "firebase/firestore";
+import type { Order, Wholesaler, Product, Warehouse, WholesalerStockItem, PostItNote as PostItNoteType } from "@/lib/types";
+import { isToday, isYesterday, format, subDays, isSameDay, startOfWeek, endOfWeek, subWeeks, isWithinInterval, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { el } from 'date-fns/locale';
 
-type PostItNote = {
-    id: number;
-    text: string;
-    color: 'yellow' | 'blue' | 'green';
-};
-
-const initialPostItNotes: PostItNote[] = [
-    { id: 1, text: 'Να γίνει τηλεφώνημα στον πελάτη Χ για το τιμολόγιο.', color: 'yellow' },
-    { id: 2, text: 'Ο νέος προμηθευτής για αλεύρι φτάνει την Παρασκευή.', color: 'blue' },
-    { id: 3, text: 'Check new product samples for next week.', color: 'green' },
-];
+type PostItNote = WithId<PostItNoteType>;
 
 const noteColors: { [key: string]: string } = {
     yellow: 'bg-yellow-400/10 border-yellow-500/30',
     blue: 'bg-blue-400/10 border-blue-500/30',
     green: 'bg-green-400/10 border-green-500/30'
 }
-
-// New Dummy Data
-const dailySales = [
-  { period: 'Σήμερα', items: 120, change: 15 },
-  { period: 'Χθες', items: 105, change: -20 },
-  { period: 'Προχθές', items: 125, change: 5 },
-  { period: '25/10', items: 120, change: -10 },
-  { period: '24/10', items: 130, change: 30 },
-  { period: '23/10', items: 100, change: -5 },
-  { period: '22/10', items: 105, change: 10 },
-];
-
-const weeklySales = [
-    { period: 'Αυτή η εβδομάδα', items: 450, change: 50 },
-    { period: 'Προηγούμενη εβδ.', items: 400, change: -100 },
-    { period: '2-9 Οκτ', items: 500, change: 80 },
-    { period: '25 Σεπτ - 1 Οκτ', items: 420, change: 20 },
-];
-
-const monthlySales = [
-    { period: 'Οκτώβριος', items: 1800, change: 200 },
-    { period: 'Σεπτέμβριος', items: 1600, change: -150 },
-    { period: 'Αύγουστος', items: 1750, change: 300 },
-    { period: 'Ιούλιος', items: 1450, change: 50 },
-    { period: 'Ιούνιος', items: 1400, change: -50 },
-];
 
 const renderSalesTable = (data: {period: string, items: number, change: number}[]) => (
     <Table>
@@ -219,18 +187,146 @@ const NoteForm = ({ note, onSave, onCancel }: { note: Partial<PostItNote> | null
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user, firestore, isUserLoading } = useFirebase();
 
-  const [postItNotes, setPostItNotes] = useState<PostItNote[]>(initialPostItNotes);
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
-  const [editingNote, setEditingNote] = useState<Partial<PostItNote> | null>(null);
+  const [editingNote, setEditingNote] = useState<PostItNote | null>(null);
+
+  // 1. Fetch Wholesaler
+  const wholesalerQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'wholesalers'), where('adminUids', 'array-contains', user.uid));
+  }, [user, firestore]);
+  const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<Wholesaler>(wholesalerQuery);
+  const wholesaler = wholesalers?.[0];
+
+  // 2. Fetch Orders for KPIs and Sales Analysis
+  const ordersQuery = useMemoFirebase(() => {
+    if (!wholesaler || !firestore) return null;
+    return query(collection(firestore, 'orders'), where('wholesalerId', '==', wholesaler.id));
+  }, [wholesaler, firestore]);
+  const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
+
+  // 3. Fetch Products, Warehouses, and Stock for Low Stock Items
+  const productsQuery = useMemoFirebase(() => {
+    if (!wholesaler || !firestore) return null;
+    return collection(firestore, 'wholesalers', wholesaler.id, 'products');
+  }, [wholesaler, firestore]);
+  const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+
+  const warehousesQuery = useMemoFirebase(() => {
+    if (!wholesaler || !firestore) return null;
+    return collection(firestore, 'wholesalers', wholesaler.id, 'warehouses');
+  }, [wholesaler, firestore]);
+  const { data: warehouses, isLoading: isLoadingWarehouses } = useCollection<Warehouse>(warehousesQuery);
+  const firstWarehouse = warehouses?.[0];
+
+  const stockQuery = useMemoFirebase(() => {
+    if (!firstWarehouse || !wholesaler || !firestore) return null;
+    return collection(firestore, 'wholesalers', wholesaler.id, 'warehouses', firstWarehouse.id, 'inventories');
+  }, [firstWarehouse, wholesaler, firestore]);
+  const { data: stock, isLoading: isLoadingStock } = useCollection<WholesalerStockItem>(stockQuery);
   
+  // 4. Fetch Post-it notes
+  const postitsQuery = useMemoFirebase(() => {
+    if (!wholesaler || !firestore) return null;
+    return query(collection(firestore, 'wholesalers', wholesaler.id, 'postits'), orderBy('createdAt', 'desc'));
+  }, [wholesaler, firestore]);
+  const { data: postItNotes, isLoading: isLoadingNotes } = useCollection<PostItNoteType>(postitsQuery);
+
+  const { todayOrders, pendingOrders } = useMemo(() => {
+    if (!orders) return { todayOrders: 0, pendingOrders: 0 };
+    const todayOrdersCount = orders.filter(o => isToday(new Date(o.date))).length;
+    const pendingOrdersCount = orders.filter(o => o.status === 'Εκκρεμής').length;
+    return { todayOrders: todayOrdersCount, pendingOrders: pendingOrdersCount };
+  }, [orders]);
+
+  const salesData = useMemo(() => {
+    const getOrderTotalItems = (order: Order) => order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+    if (!orders) {
+      return { daily: [], weekly: [], monthly: [] };
+    }
+    const now = new Date();
+
+    // Daily
+    const daily = Array.from({ length: 7 }).map((_, i) => {
+        const targetDate = subDays(now, i);
+        const prevTargetDate = subDays(now, i + 1);
+
+        const items = orders
+            .filter(o => isSameDay(new Date(o.date), targetDate))
+            .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+        
+        const prevItems = orders
+            .filter(o => isSameDay(new Date(o.date), prevTargetDate))
+            .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+
+        let periodLabel = format(targetDate, 'dd/MM');
+        if (isToday(targetDate)) periodLabel = 'Σήμερα';
+        if (isYesterday(targetDate)) periodLabel = 'Χθες';
+
+        return { period: periodLabel, items, change: items - prevItems };
+    });
+
+    // Weekly
+    const weekly = Array.from({ length: 4 }).map((_, i) => {
+      const weekAgo = subWeeks(now, i);
+      const start = startOfWeek(weekAgo, { weekStartsOn: 1 });
+      const end = endOfWeek(weekAgo, { weekStartsOn: 1 });
+
+      const prevWeekAgo = subWeeks(now, i + 1);
+      const prevStart = startOfWeek(prevWeekAgo, { weekStartsOn: 1 });
+      const prevEnd = endOfWeek(prevWeekAgo, { weekStartsOn: 1 });
+      
+      const items = orders
+          .filter(o => isWithinInterval(new Date(o.date), { start, end }))
+          .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+      
+      const prevItems = orders
+          .filter(o => isWithinInterval(new Date(o.date), { start: prevStart, end: prevEnd }))
+          .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+      
+      let periodLabel = `${format(start, 'dd/MM')} - ${format(end, 'dd/MM')}`;
+      if (i === 0) periodLabel = "Αυτή η εβδομάδα";
+      if (i === 1) periodLabel = "Προηγούμενη εβδ.";
+
+      return { period: periodLabel, items, change: items - prevItems };
+    });
+    
+    // Monthly
+    const monthly = Array.from({ length: 6 }).map((_, i) => {
+        const monthAgo = subMonths(now, i);
+        const start = startOfMonth(monthAgo);
+        const end = endOfMonth(monthAgo);
+
+        const prevMonthAgo = subMonths(now, i + 1);
+        const prevStart = startOfMonth(prevMonthAgo);
+        const prevEnd = endOfMonth(prevMonthAgo);
+
+        const items = orders
+            .filter(o => isWithinInterval(new Date(o.date), { start, end }))
+            .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+        
+        const prevItems = orders
+            .filter(o => isWithinInterval(new Date(o.date), { start: prevStart, end: prevEnd }))
+            .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+        
+        return { period: format(monthAgo, 'LLLL', { locale: el }), items, change: items - prevItems };
+    });
+
+    return { daily, weekly, monthly };
+  }, [orders]);
+
+
   const lowStockItems = useMemo(() => {
-    return wholesalerStock
+    if (!stock || !products) return [];
+    return stock
     .map(stockItem => {
         const product = products.find(p => p.id === stockItem.productId);
         if (!product) return null;
         const { quantity, idealStock } = stockItem;
-        if (idealStock > 0 && quantity <= idealStock / 3) {
+        if (idealStock > 0 && quantity < idealStock * 0.4) {
             return {
                 ...product,
                 currentStock: quantity,
@@ -240,13 +336,9 @@ export default function AdminDashboardPage() {
         }
         return null;
     })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, []);
-
-  const kpis = [
-    { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
-    { title: "Εκκρεμείς Παραγγελίες", value: adminDashboardData.pendingOrders, icon: Icons.history },
-  ];
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a,b) => (a.currentStock/a.idealStock) - (b.currentStock/b.idealStock));
+  }, [stock, products]);
 
   const handleRoleChange = (role: string) => {
     if (role === 'store') {
@@ -254,28 +346,39 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const openNoteDialog = (note: Partial<PostItNote> | null) => {
+  const openNoteDialog = (note: PostItNote | null) => {
     setEditingNote(note);
     setIsNoteDialogOpen(true);
   };
 
-  const handleDeleteNote = (noteId: number) => {
-    setPostItNotes(prev => prev.filter(note => note.id !== noteId));
+  const handleDeleteNote = (noteId: string) => {
+    if (!firestore || !wholesaler) return;
+    const noteRef = doc(firestore, 'wholesalers', wholesaler.id, 'postits', noteId);
+    deleteDocumentNonBlocking(noteRef);
     toast({ title: "Η σημείωση διαγράφηκε" });
   };
 
   const handleSaveNote = (data: { text: string; color: 'yellow' | 'blue' | 'green' }) => {
+    if (!firestore || !wholesaler) return;
     const { text, color } = data;
 
     if (editingNote?.id) { // Editing
-        setPostItNotes(prev => prev.map(note => note.id === editingNote.id ? { ...note, text, color } : note));
+        const noteRef = doc(firestore, 'wholesalers', wholesaler.id, 'postits', editingNote.id);
+        updateDocumentNonBlocking(noteRef, { text, color });
         toast({ title: "Η σημείωση ενημερώθηκε" });
     } else { // Adding
-        const newNote: PostItNote = { id: Date.now(), text, color };
-        setPostItNotes(prev => [newNote, ...prev]);
+        const notesColRef = collection(firestore, 'wholesalers', wholesaler.id, 'postits');
+        const newNote: PostItNoteType = {
+            text,
+            color,
+            createdAt: serverTimestamp(),
+            wholesalerId: wholesaler.id,
+            ownerId: wholesaler.ownerId,
+            adminUids: wholesaler.adminUids,
+        };
+        addDocumentNonBlocking(notesColRef, newNote);
         toast({ title: "Η σημείωση προστέθηκε" });
     }
-
     setIsNoteDialogOpen(false);
     setEditingNote(null);
   };
@@ -297,17 +400,25 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Left Column */}
         <div className="lg:col-span-1 space-y-6">
-          {kpis.map(kpi => (
-            <Card key={kpi.title}>
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
-                <kpi.icon className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Σημερινές Παραγγελίες</CardTitle>
+                <Icons.newOrder className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{kpi.value}</div>
+                {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{todayOrders}</div>}
               </CardContent>
             </Card>
-          ))}
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Εκκρεμείς Παραγγελίες</CardTitle>
+                <Icons.history className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{pendingOrders}</div>}
+              </CardContent>
+            </Card>
+          
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -315,11 +426,13 @@ export default function AdminDashboardPage() {
                         <span>Προϊόντα σε Έλλειψη</span>
                     </CardTitle>
                     <CardDescription>
-                        Προϊόντα με απόθεμα κάτω του 33% του ιδανικού.
+                        Προϊόντα με απόθεμα κάτω του 40% του ιδανικού.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {lowStockItems.length > 0 ? (
+                    {isLoadingProducts || isLoadingStock ? (
+                         <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin"/></div>
+                    ) : lowStockItems.length > 0 ? (
                         <Accordion type="multiple" className="w-full space-y-2">
                             {lowStockItems.map(item => (
                                 <AccordionItem key={item.id} value={`low-stock-${item.id}`} className="rounded-lg border border-destructive/30 bg-destructive/10 px-4">
@@ -348,26 +461,32 @@ export default function AdminDashboardPage() {
                 </Button>
             </CardHeader>
             <CardContent>
-                <Accordion type="multiple" className="w-full space-y-2">
-                    {postItNotes.map(note => (
-                        <AccordionItem key={note.id} value={`item-${note.id}`} className={cn("rounded-lg border", noteColors[note.color])}>
-                            <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline text-left">
-                                {note.text.substring(0, 40)}{note.text.length > 40 ? '...' : ''}
-                            </AccordionTrigger>
-                            <AccordionContent className="px-4 pt-0 pb-3 text-sm text-muted-foreground space-y-2">
-                               <p>{note.text}</p>
-                               <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openNoteDialog(note)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteNote(note.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    ))}
-                </Accordion>
+                {isLoadingNotes ? (
+                     <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin"/></div>
+                ) : postItNotes && postItNotes.length > 0 ? (
+                    <Accordion type="multiple" className="w-full space-y-2">
+                        {postItNotes.map(note => (
+                            <AccordionItem key={note.id} value={`item-${note.id}`} className={cn("rounded-lg border", noteColors[note.color])}>
+                                <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline text-left">
+                                    {note.text.substring(0, 40)}{note.text.length > 40 ? '...' : ''}
+                                </AccordionTrigger>
+                                <AccordionContent className="px-4 pt-0 pb-3 text-sm text-muted-foreground space-y-2">
+                                <p>{note.text}</p>
+                                <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openNoteDialog(note)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteNote(note.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
+                ) : (
+                    <p className="text-center text-sm text-muted-foreground py-4">Δεν υπάρχουν σημειώσεις.</p>
+                )}
             </CardContent>
           </Card>
         </div>
@@ -380,22 +499,26 @@ export default function AdminDashboardPage() {
                 <CardDescription>Συγκριτικά δεδομένα πωλήσεων ανά χρονική περίοδο.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="days">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="days">Ημέρες</TabsTrigger>
-                        <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
-                        <TabsTrigger value="months">Μήνες</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="days" className="mt-4">
-                        {renderSalesTable(dailySales)}
-                    </TabsContent>
-                    <TabsContent value="weeks" className="mt-4">
-                        {renderSalesTable(weeklySales)}
-                    </TabsContent>
-                    <TabsContent value="months" className="mt-4">
-                        {renderSalesTable(monthlySales)}
-                    </TabsContent>
-                </Tabs>
+                {isLoadingOrders ? (
+                    <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin"/></div>
+                ) : (
+                    <Tabs defaultValue="days">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                            <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                            <TabsTrigger value="months">Μήνες</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="days" className="mt-4">
+                            {renderSalesTable(salesData.daily)}
+                        </TabsContent>
+                        <TabsContent value="weeks" className="mt-4">
+                            {renderSalesTable(salesData.weekly)}
+                        </TabsContent>
+                        <TabsContent value="months" className="mt-4">
+                            {renderSalesTable(salesData.monthly)}
+                        </TabsContent>
+                    </Tabs>
+                )}
             </CardContent>
           </Card>
           
@@ -405,22 +528,26 @@ export default function AdminDashboardPage() {
                 <CardDescription>Οπτικοποίηση της προόδου των πωλήσεών σας.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="days">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="days">Ημέρες</TabsTrigger>
-                        <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
-                        <TabsTrigger value="months">Μήνες</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="days" className="mt-4">
-                        <SalesChart data={dailySales.slice().reverse()} dataKey="items" />
-                    </TabsContent>
-                    <TabsContent value="weeks" className="mt-4">
-                        <SalesChart data={weeklySales.slice().reverse()} dataKey="items" />
-                    </TabsContent>
-                    <TabsContent value="months" className="mt-4">
-                        <SalesChart data={monthlySales.slice().reverse()} dataKey="items" />
-                    </TabsContent>
-                </Tabs>
+                 {isLoadingOrders ? (
+                    <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin"/></div>
+                ) : (
+                    <Tabs defaultValue="days">
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="days">Ημέρες</TabsTrigger>
+                            <TabsTrigger value="weeks">Εβδομάδες</TabsTrigger>
+                            <TabsTrigger value="months">Μήνες</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="days" className="mt-4">
+                            <SalesChart data={salesData.daily.slice().reverse()} dataKey="items" />
+                        </TabsContent>
+                        <TabsContent value="weeks" className="mt-4">
+                            <SalesChart data={salesData.weekly.slice().reverse()} dataKey="items" />
+                        </TabsContent>
+                        <TabsContent value="months" className="mt-4">
+                            <SalesChart data={salesData.monthly.slice().reverse()} dataKey="items" />
+                        </TabsContent>
+                    </Tabs>
+                )}
             </CardContent>
           </Card>
         </div>
