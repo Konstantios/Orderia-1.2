@@ -1,4 +1,4 @@
-import type { Product, Customer, Order, CustomerInventoryItem, WholesalerStockItem, AdminDashboardData, Notification, AdminCustomer } from './types';
+import type { Product, Customer, Order, CustomerInventoryItem, WholesalerStockItem, AdminDashboardData, Notification } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 function getImage(id: string) {
@@ -48,67 +48,13 @@ export const customers: Customer[] = [
   },
 ];
 
-export const adminCustomers: AdminCustomer[] = [
-  {
-    id: 'cust-1',
-    companyName: 'Φούρνος "Η Γεύση"',
-    vatNumber: '123456789',
-    phone1: '2101234567',
-    address: 'Αριστοτέλους 1, 10432, Αθήνα',
-    googleMapsLink: 'https://maps.app.goo.gl/12345',
-    deliveryDay: 'Τρίτη',
-    contactName: 'Νίκος Γεωργίου'
-  },
-  {
-    id: 'cust-2',
-    companyName: 'Snack Bar "Το Γρήγορο"',
-    vatNumber: '987654321',
-    phone1: '2109876543',
-    phone2: '6971234567',
-    address: 'Πατησίων 100, 11257, Αθήνα',
-    googleMapsLink: 'https://maps.app.goo.gl/67890',
-    deliveryDay: 'Δευτέρα',
-    contactName: 'Μαρία Παπαδάκη'
-  },
-  {
-    id: 'cust-3',
-    companyName: 'Ζαχαροπλαστείο "Ο Γλυκός Πειρασμός"',
-    vatNumber: '112233445',
-    phone1: '2105555555',
-    address: 'Πλατεία Συντάγματος 5, 10563, Αθήνα',
-    googleMapsLink: 'https://maps.app.goo.gl/abcde',
-    deliveryDay: 'Πέμπτη',
-    contactName: 'Ελένη Κώστα'
-  },
-  {
-    id: 'cust-4',
-    companyName: 'Cafe "Η Γωνιά"',
-    vatNumber: '223344556',
-    phone1: '2106666666',
-    address: 'Λεωφόρος Κηφισίας 1, 11523, Αθήνα',
-    googleMapsLink: 'https://maps.app.goo.gl/fghij',
-    deliveryDay: 'Τρίτη',
-    contactName: 'Άννα Ιωάννου'
-  },
-  {
-    id: 'cust-5',
-    companyName: 'Mini Market "Το Παντοπωλείο"',
-    vatNumber: '334455667',
-    phone1: '2107777777',
-    address: 'Βασιλίσσης Σοφίας 25, 10674, Αθήνα',
-    googleMapsLink: 'https://maps.app.goo.gl/klmno',
-    deliveryDay: 'Τρίτη',
-    contactName: 'Κώστας Δημητρίου'
-  }
-];
-
 // Updated inventory to match the screenshot
 export const customerInventory: CustomerInventoryItem[] = [
-  { productId: 'p1', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Pizza
-  { productId: 'p2', storeId: 'store-1', currentStock: 12, lastAction: { type: 'in', value: 10 } },  // Croissant
-  { productId: 'p3', storeId: 'store-1', currentStock: 38, lastAction: { type: 'out', value: 2 } },  // Bougatsa
-  { productId: 'p4', storeId: 'store-1', currentStock: 18 },  // Kourou
-  { productId: 'p5', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Spanakopita, keep for other pages
+  { productId: 'p1', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 }, ownerId: '', managerUids: [] },   // Pizza
+  { productId: 'p2', storeId: 'store-1', currentStock: 12, lastAction: { type: 'in', value: 10 }, ownerId: '', managerUids: [] },  // Croissant
+  { productId: 'p3', storeId: 'store-1', currentStock: 38, lastAction: { type: 'out', value: 2 }, ownerId: '', managerUids: [] },  // Bougatsa
+  { productId: 'p4', storeId: 'store-1', currentStock: 18, ownerId: '', managerUids: [] },  // Kourou
+  { productId: 'p5', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 }, ownerId: '', managerUids: [] },   // Spanakopita, keep for other pages
 ];
 
 export const orderHistory: Order[] = [
@@ -194,11 +140,11 @@ export const adminOrders: Order[] = [
 
 
 export const wholesalerStock: WholesalerStockItem[] = [
-    { productId: 'p1', quantity: 150, idealStock: 100 }, // Green
-    { productId: 'p2', quantity: 70, idealStock: 150 },  // Yellow
-    { productId: 'p3', quantity: 30, idealStock: 100 },  // Red
-    { productId: 'p4', quantity: 120, idealStock: 100 }, // Green
-    { productId: 'p5', quantity: 40, idealStock: 150 },  // Red
+    { productId: 'p1', quantity: 150, idealStock: 100, wholesalerId: '', warehouseId: '', ownerId: '', adminUids: [] }, // Green
+    { productId: 'p2', quantity: 70, idealStock: 150, wholesalerId: '', warehouseId: '', ownerId: '', adminUids: [] },  // Yellow
+    { productId: 'p3', quantity: 30, idealStock: 100, wholesalerId: '', warehouseId: '', ownerId: '', adminUids: [] },  // Red
+    { productId: 'p4', quantity: 120, idealStock: 100, wholesalerId: '', warehouseId: '', ownerId: '', adminUids: [] }, // Green
+    { productId: 'p5', quantity: 40, idealStock: 150, wholesalerId: '', warehouseId: '', ownerId: '', adminUids: [] },  // Red
 ];
 
 export const adminDashboardData: AdminDashboardData = {

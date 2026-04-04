@@ -14,11 +14,40 @@ import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-reac
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useFirebase, useCollection, useMemoFirebase, type WithId } from '@/firebase';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const customer = customers[0];
 const customerProducts = allProducts.filter(p => customer.products.some(cp => cp.productId === p.id));
 const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+
+function getNextDeliveryDate(deliveryDay: string): Date {
+    const dayMapping: { [key: string]: number } = {
+        'Κυριακή': 0, 'Δευτέρα': 1, 'Τρίτη': 2, 'Τετάρτη': 3, 'Πέμπτη': 4, 'Παρασκευή': 5, 'Σάββατο': 6
+    };
+    const deliveryDayIndex = dayMapping[deliveryDay];
+
+    if (typeof deliveryDayIndex === 'undefined') {
+        // Fallback to next day if day is invalid
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return tomorrow;
+    }
+
+    const today = new Date();
+    const todayDayIndex = today.getDay();
+    
+    let dayDifference = deliveryDayIndex - todayDayIndex;
+    
+    // If the delivery day is today or has passed for this week, schedule for next week
+    if (dayDifference <= 0) { 
+        dayDifference += 7;
+    }
+
+    const deliveryDate = new Date();
+    deliveryDate.setDate(today.getDate() + dayDifference);
+    deliveryDate.setHours(12, 0, 0, 0); // Set a neutral time like noon
+    return deliveryDate;
+}
 
 
 export default function NewOrderPage() {
@@ -260,13 +289,16 @@ export default function NewOrderPage() {
         const wholesalerMembers = wholesaler.adminUids || [wholesaler.ownerId];
         const memberUids = Array.from(new Set([...storeMembers, ...wholesalerMembers]));
 
+        // Calculate the next delivery date
+        const deliveryDate = getNextDeliveryDate(store.deliveryDay);
 
         // Construct the new order object with all necessary fields
         const newOrderData = {
             storeId: store.id,
             customerName: store.businessName,
             wholesalerId: wholesaler.id,
-            date: new Date(),
+            date: serverTimestamp(),
+            deliveryDate: deliveryDate,
             status: 'Εκκρεμής',
             notes: notes || '',
             items: orderItems,

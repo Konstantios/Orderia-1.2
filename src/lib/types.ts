@@ -22,29 +22,29 @@ export interface Customer {
   products: CustomerProduct[];
 }
 
-export interface AdminCustomer {
-  id: string;
-  companyName: string;
-  vatNumber: string;
-  phone1: string;
-  phone2?: string;
-  address: string;
-  googleMapsLink?: string;
-  deliveryDay: string;
-  contactName: string;
-}
-
 export interface Store {
     id: string;
     businessName: string;
     ownerName: string;
-    taxId: string;
+    taxId?: string;
     phone: string;
+    phone2?: string;
     email: string;
     address: string;
-    ownerId: string;
-    managerUids: string[];
+    googleMapsLink?: string;
+    deliveryDay: string;
+    ownerId?: string;
+    managerUids?: string[];
 }
+
+export interface SupplierStoreConnection {
+    id: string;
+    wholesalerId: string;
+    storeId: string;
+    isActive: boolean;
+    connectionDate: any;
+}
+
 
 export interface Wholesaler {
     id: string;
@@ -87,6 +87,7 @@ export interface Order {
   id: string;
   customerName: string;
   date: any;
+  deliveryDate?: any;
   items: OrderItem[];
   status: 'Εκκρεμής' | 'Ολοκληρωμένη' | 'Απεσταλμένη';
   notes?: string;
@@ -142,5 +143,3 @@ export interface Notification {
   date: string;
   read: boolean;
 }
-
-    

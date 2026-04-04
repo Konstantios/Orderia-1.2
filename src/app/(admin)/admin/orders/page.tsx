@@ -33,7 +33,7 @@ export default function AdminOrdersPage() {
     const ordersQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         // The memberUids check is sufficient and secure
-        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), where('status', '==', 'Εκκρεμής'), orderBy('date', 'desc'));
+        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), where('status', '==', 'Εκκρεμής'), orderBy('deliveryDate', 'desc'));
     }, [firestore, user]);
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 
@@ -74,8 +74,8 @@ export default function AdminOrdersPage() {
         const selectedDate = selectedDayInfo.date;
         
         const filteredOrders = orders.filter(o => {
-            const orderDate = (o.date as unknown as Timestamp)?.toDate();
-            return orderDate && isSameDay(orderDate, selectedDate);
+            const deliveryDate = (o.deliveryDate as unknown as Timestamp)?.toDate();
+            return deliveryDate && isSameDay(deliveryDate, selectedDate);
         });
 
         return filteredOrders;
@@ -162,7 +162,7 @@ export default function AdminOrdersPage() {
             </div>
             
             <div className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Ημερομηνια Παραγγελιας</h2>
+                <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Ημερομηνια Παραδοσης</h2>
                 {nextSevenDays.length > 0 && (
                 <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-7">
