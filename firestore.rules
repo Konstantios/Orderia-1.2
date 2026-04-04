@@ -172,10 +172,9 @@ service cloud.firestore {
          * @principle Access is granted based on membership in the grandparent wholesaler entity.
          */
         match /inventories/{inventoryId} {
-            allow get, list: if canAccessWholesalerSubcollection(wholesalerId);
-            allow create: if canAccessWholesalerSubcollection(wholesalerId) && isWholesalerMember(request.resource.data);
-            allow update: if canAccessWholesalerSubcollection(wholesalerId) && isWholesalerMember(resource.data);
-            allow delete: if canAccessWholesalerSubcollection(wholesalerId) && isWholesalerMember(resource.data);
+          allow get, list: if canAccessWholesalerSubcollection(wholesalerId);
+          allow create: if canAccessWholesalerSubcollection(wholesalerId) && isWholesalerMember(request.resource.data);
+          allow update, delete: if canAccessWholesalerSubcollection(wholesalerId);
         }
       }
     }
@@ -220,10 +219,9 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /inventories/{storeInventoryId} {
-        allow get, list: if canAccessStoreSubcollection(storeId);
-        allow create: if canAccessStoreSubcollection(storeId) && isStoreMember(request.resource.data) && request.resource.data.storeId == storeId;
-        allow update: if canAccessStoreSubcollection(storeId) && isStoreMember(resource.data) && request.resource.data.storeId == storeId;
-        allow delete: if canAccessStoreSubcollection(storeId) && isStoreMember(resource.data);
+          allow get, list: if canAccessStoreSubcollection(storeId);
+          allow create: if canAccessStoreSubcollection(storeId) && isStoreMember(request.resource.data) && request.resource.data.storeId == storeId;
+          allow update, delete: if canAccessStoreSubcollection(storeId);
       }
     }
 
