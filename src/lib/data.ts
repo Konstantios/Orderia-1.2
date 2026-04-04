@@ -194,18 +194,18 @@ export const adminOrders: Order[] = [
 
 
 export const wholesalerStock: WholesalerStockItem[] = [
-    { productId: 'p1', quantity: 150, idealStock: 100 },
-    { productId: 'p2', quantity: 200, idealStock: 150 },
-    { productId: 'p3', quantity: 80, idealStock: 100 },
-    { productId: 'p4', quantity: 120, idealStock: 100 },
-    { productId: 'p5', quantity: 180, idealStock: 150 },
-    { productId: 'p6', quantity: 250, idealStock: 200 },
+    { productId: 'p1', quantity: 150, idealStock: 100 }, // Green
+    { productId: 'p2', quantity: 70, idealStock: 150 },  // Yellow
+    { productId: 'p3', quantity: 30, idealStock: 100 },  // Red
+    { productId: 'p4', quantity: 120, idealStock: 100 }, // Green
+    { productId: 'p5', quantity: 40, idealStock: 150 },  // Red
+    { productId: 'p6', quantity: 100, idealStock: 200 }, // Yellow
 ];
 
 export const adminDashboardData: AdminDashboardData = {
     todayOrders: 5,
     pendingOrders: 2,
-    lowStockItems: 1,
+    lowStockItems: 2, // Updated based on new wholesalerStock data
     newCustomers: 3,
 };
 

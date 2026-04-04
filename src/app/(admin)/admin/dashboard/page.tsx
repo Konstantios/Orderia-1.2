@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Icons } from "@/components/icons"
-import { adminDashboardData } from "@/lib/data"
+import { adminDashboardData, products, wholesalerStock } from "@/lib/data"
 import {
   Table,
   TableBody,
@@ -15,21 +15,37 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell } from 'recharts';
 import { cn } from "@/lib/utils"
-import { ArrowDown, ArrowUp } from "lucide-react"
+import { ArrowDown, ArrowUp, Edit, PlusCircle, Trash2 } from "lucide-react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
-const kpis = [
-  { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
-  { title: "Εκκρεμείς Παραγγελίες", value: adminDashboardData.pendingOrders, icon: Icons.history },
-  { title: "Προϊόντα σε Έλλειψη", value: adminDashboardData.lowStockItems, icon: Icons.warehouse },
-  { title: "Νέοι Πελάτες", value: adminDashboardData.newCustomers, icon: Icons.customers },
-]
+type PostItNote = {
+    id: number;
+    text: string;
+    color: 'yellow' | 'blue' | 'green';
+};
 
-const dashboardWidgets = ["Σημερινές Παραγγελίες", "Εκκρεμείς Παραγγελίες", "Προϊόντα σε Έλλειψη"];
-const mainKpis = kpis.filter(kpi => dashboardWidgets.includes(kpi.title));
-
-const postItNotes = [
+const initialPostItNotes: PostItNote[] = [
     { id: 1, text: 'Να γίνει τηλεφώνημα στον πελάτη Χ για το τιμολόγιο.', color: 'yellow' },
     { id: 2, text: 'Ο νέος προμηθευτής για αλεύρι φτάνει την Παρασκευή.', color: 'blue' },
     { id: 3, text: 'Check new product samples for next week.', color: 'green' },
@@ -40,7 +56,6 @@ const noteColors: { [key: string]: string } = {
     blue: 'bg-blue-400/10 border-blue-500/30',
     green: 'bg-green-400/10 border-green-500/30'
 }
-
 
 // New Dummy Data
 const dailySales = [
@@ -124,12 +139,76 @@ const SalesChart = ({ data, dataKey }: { data: any[], dataKey: string }) => (
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [postItNotes, setPostItNotes] = useState<PostItNote[]>(initialPostItNotes);
+  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<Partial<PostItNote> | null>(null);
+  
+  const lowStockItems = useMemo(() => {
+    return wholesalerStock
+    .map(stockItem => {
+        const product = products.find(p => p.id === stockItem.productId);
+        if (!product) return null;
+        const { quantity, idealStock } = stockItem;
+        if (idealStock > 0 && quantity <= idealStock / 3) {
+            return {
+                ...product,
+                currentStock: quantity,
+                idealStock,
+                suggestion: Math.max(0, idealStock - quantity),
+            };
+        }
+        return null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+  }, []);
+
+  const kpis = [
+    { title: "Σημερινές Παραγγελίες", value: adminDashboardData.todayOrders, icon: Icons.newOrder },
+    { title: "Εκκρεμείς Παραγγελίες", value: adminDashboardData.pendingOrders, icon: Icons.history },
+  ];
 
   const handleRoleChange = (role: string) => {
     if (role === 'store') {
       router.push('/');
     }
   };
+
+  const openNoteDialog = (note: Partial<PostItNote> | null) => {
+    setEditingNote(note);
+    setIsNoteDialogOpen(true);
+  };
+
+  const handleDeleteNote = (noteId: number) => {
+    setPostItNotes(prev => prev.filter(note => note.id !== noteId));
+    toast({ title: "Η σημείωση διαγράφηκε" });
+  };
+
+  const handleSaveNote = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const text = formData.get("text") as string;
+    const color = formData.get("color") as 'yellow' | 'blue' | 'green';
+
+    if (!text) {
+        toast({ variant: 'destructive', title: "Το κείμενο δεν μπορεί να είναι κενό" });
+        return;
+    }
+
+    if (editingNote?.id) { // Editing
+        setPostItNotes(prev => prev.map(note => note.id === editingNote.id ? { ...note, text, color } : note));
+        toast({ title: "Η σημείωση ενημερώθηκε" });
+    } else { // Adding
+        const newNote: PostItNote = { id: Date.now(), text, color };
+        setPostItNotes(prev => [newNote, ...prev]);
+        toast({ title: "Η σημείωση προστέθηκε" });
+    }
+
+    setIsNoteDialogOpen(false);
+    setEditingNote(null);
+  };
+
 
   return (
     <>
@@ -147,7 +226,7 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Left Column */}
         <div className="lg:col-span-1 space-y-6">
-          {mainKpis.map(kpi => (
+          {kpis.map(kpi => (
             <Card key={kpi.title}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{kpi.title}</CardTitle>
@@ -158,8 +237,45 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
           ))}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Icons.warehouse className="h-5 w-5 text-destructive" />
+                        <span>Προϊόντα σε Έλλειψη</span>
+                    </CardTitle>
+                    <CardDescription>
+                        Προϊόντα με απόθεμα κάτω του 33% του ιδανικού.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {lowStockItems.length > 0 ? (
+                        <Accordion type="multiple" className="w-full space-y-2">
+                            {lowStockItems.map(item => (
+                                <AccordionItem key={item.id} value={`low-stock-${item.id}`} className="rounded-lg border border-destructive/30 bg-destructive/10 px-4">
+                                    <AccordionTrigger className="py-3 text-sm font-semibold hover:no-underline text-left">
+                                        {item.name}
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-0 pb-3 text-sm text-muted-foreground space-y-1">
+                                        <div className="flex justify-between"><span>Κωδικός:</span> <span>{item.code}</span></div>
+                                        <div className="flex justify-between"><span>Απόθεμα:</span> <span className="font-bold text-destructive">{item.currentStock}</span></div>
+                                        <div className="flex justify-between"><span>Ιδανικό:</span> <span>{item.idealStock}</span></div>
+                                        <div className="flex justify-between"><span>Πρόταση:</span> <span className="font-bold text-accent">+{item.suggestion}</span></div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </Accordion>
+                    ) : (
+                        <p className="text-center text-sm text-muted-foreground py-4">Κανένα προϊόν σε κρίσιμη έλλειψη.</p>
+                    )}
+                </CardContent>
+            </Card>
            <Card>
-            <CardHeader><CardTitle>Post-it</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Post-it</CardTitle>
+                <Button variant="ghost" size="icon" onClick={() => openNoteDialog({})}>
+                    <PlusCircle className="h-5 w-5" />
+                </Button>
+            </CardHeader>
             <CardContent>
                 <Accordion type="multiple" className="w-full space-y-2">
                     {postItNotes.map(note => (
@@ -167,8 +283,16 @@ export default function AdminDashboardPage() {
                             <AccordionTrigger className="px-4 py-3 text-sm font-medium hover:no-underline text-left">
                                 {note.text.substring(0, 40)}{note.text.length > 40 ? '...' : ''}
                             </AccordionTrigger>
-                            <AccordionContent className="px-4 pt-0 pb-3 text-sm text-muted-foreground">
-                               {note.text}
+                            <AccordionContent className="px-4 pt-0 pb-3 text-sm text-muted-foreground space-y-2">
+                               <p>{note.text}</p>
+                               <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openNoteDialog(note)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteNote(note.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </AccordionContent>
                         </AccordionItem>
                     ))}
@@ -230,6 +354,39 @@ export default function AdminDashboardPage() {
           </Card>
         </div>
       </div>
+      <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>{editingNote?.id ? 'Επεξεργασία Σημείωσης' : 'Νέα Σημείωση'}</DialogTitle>
+                <DialogDescription>
+                    {editingNote?.id ? 'Επεξεργαστείτε το κείμενο ή το χρώμα της σημείωσης.' : 'Προσθέστε μια νέα σημείωση στον πίνακα ελέγχου.'}
+                </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSaveNote} className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="note-text">Κείμενο</Label>
+                    <Textarea id="note-text" name="text" defaultValue={editingNote?.text || ''} required />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="note-color">Χρώμα</Label>
+                    <Select name="color" defaultValue={editingNote?.color || 'yellow'}>
+                        <SelectTrigger id="note-color">
+                            <SelectValue placeholder="Επιλέξτε χρώμα" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="yellow">Κίτρινο</SelectItem>
+                            <SelectItem value="blue">Μπλε</SelectItem>
+                            <SelectItem value="green">Πράσινο</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsNoteDialogOpen(false)}>Ακύρωση</Button>
+                    <Button type="submit">Αποθήκευση</Button>
+                </DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
