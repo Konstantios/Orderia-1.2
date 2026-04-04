@@ -1,6 +1,7 @@
 'use client';
 import {
   Auth, // Import Auth type for type hinting
+  User,
   signInAnonymously,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -23,11 +24,11 @@ export function initiateEmailSignUp(
   authInstance: Auth,
   email: string,
   password: string,
-  onSuccess: () => void
+  onSuccess: (user: User) => void
 ): void {
   createUserWithEmailAndPassword(authInstance, email, password)
-    .then(() => {
-      onSuccess();
+    .then((userCredential) => {
+      onSuccess(userCredential.user);
     })
     .catch((error) => {
       let title = 'Σφάλμα Εγγραφής';

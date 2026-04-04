@@ -12,12 +12,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { initiateEmailSignUp, initiateEmailSignIn, useAuth } from '@/firebase';
+import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const auth = useAuth();
+  const { auth, firestore } = useFirebase();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -94,9 +96,17 @@ export default function LoginPage() {
   const handleRegisterBusiness = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
+    const businessType = formData.get('businessType') as string;
     const businessName = formData.get('businessName') as string;
+    const taxId = formData.get('vat') as string;
+    const ownerName = formData.get('adminName') as string;
     const email = formData.get('adminEmail') as string;
     const password = formData.get('adminPassword') as string;
+
+    if (!businessName || !taxId || !ownerName || !email || !password) {
+        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Παρακαλώ συμπληρώστε όλα τα πεδία.' });
+        return;
+    }
 
     if (password.length < 6) {
         toast({
@@ -107,13 +117,46 @@ export default function LoginPage() {
         return;
     }
 
-    const onSuccess = () => {
+    const onSuccess = (user: User) => {
+        if (!firestore) return;
+
+        if (businessType === 'store') {
+            const storesColRef = collection(firestore, 'stores');
+            addDocumentNonBlocking(storesColRef, {
+                businessName: businessName,
+                taxId: taxId,
+                ownerName: ownerName,
+                email: email,
+                phone: '',
+                address: '',
+                ownerId: user.uid,
+            });
+        } else if (businessType === 'supplier') {
+            const wholesalersColRef = collection(firestore, 'wholesalers');
+            const supplierCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            addDocumentNonBlocking(wholesalersColRef, {
+                companyName: businessName,
+                taxId: taxId,
+                email: email,
+                ownerId: user.uid,
+                adminUids: [user.uid],
+                phone: '',
+                address: '',
+                supplierCode: supplierCode,
+                productCategories: [],
+                serviceArea: '',
+                description: '',
+                orderAcceptanceHours: '',
+                logoUrl: ''
+            });
+        }
+        
         toast({
             title: 'Η Επιχείρηση Καταχωρήθηκε!',
             description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
         });
         setIsRequestDialogOpen(false);
-    }
+    };
 
     initiateEmailSignUp(auth, email, password, onSuccess);
   };
