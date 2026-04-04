@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { products } from '@/lib/data';
-import type { Order, OrderItem } from '@/lib/types';
+import type { Order, OrderItem, Product } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,8 +13,8 @@ import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { el } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
-import { useFirebase, useDoc, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirebase, useDoc, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 
 
 export default function OrderDetailsPage() {
@@ -32,6 +31,13 @@ export default function OrderDetailsPage() {
 
     const { data: order, isLoading: isLoadingOrder, error } = useDoc<Order>(orderRef);
 
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore || !order?.wholesalerId) return null;
+        return collection(firestore, 'wholesalers', order.wholesalerId, 'products');
+    }, [firestore, order]);
+
+    const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+
     const [supplierNotes, setSupplierNotes] = useState('');
 
     useEffect(() => {
@@ -47,7 +53,7 @@ export default function OrderDetailsPage() {
     };
     
     const handleExport = () => {
-        if (!order) return;
+        if (!order || !products) return;
 
         const orderDate = (order.date as any)?.toDate ? (order.date as any).toDate() : new Date(order.date);
 
@@ -97,7 +103,7 @@ export default function OrderDetailsPage() {
         XLSX.writeFile(workbook, `Order_${order.id}.xlsx`);
     };
     
-    if (isLoadingOrder) {
+    if (isLoadingOrder || isLoadingProducts) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
@@ -143,9 +149,13 @@ export default function OrderDetailsPage() {
                         <CardHeader><CardTitle>Προϊόντα</CardTitle></CardHeader>
                         <CardContent>
                             <ul className="space-y-4">
-                                {order.items.length > 0 ? order.items.map((item: OrderItem) => {
+                                {order.items.length > 0 && products ? order.items.map((item: OrderItem) => {
                                     const product = products.find(p => p.id === item.productId);
-                                    if (!product) return null;
+                                    if (!product) return (
+                                        <li key={item.productId} className="flex items-center gap-4 text-sm text-destructive">
+                                            Δεν βρέθηκε το προϊόν ID: {item.productId}
+                                        </li>
+                                    );
                                     return (
                                         <li key={item.productId} className="flex items-center gap-4">
                                             <Image src={product.imageUrl} alt={product.name} width={56} height={56} className="rounded-md object-cover" data-ai-hint={product.imageHint} />

@@ -6,8 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { products } from "@/lib/data";
-import type { Order, Wholesaler } from "@/lib/types";
+import type { Order, Wholesaler, Product } from "@/lib/types"; // ADD Product
 import { Download, History, Loader2 } from "lucide-react";
 import { format, addDays, isSameDay } from 'date-fns';
 import { el } from 'date-fns/locale';
@@ -22,6 +21,7 @@ export default function AdminOrdersPage() {
     
     const { user, firestore } = useFirebase();
 
+    // 1. Fetch Wholesaler
     const wholesalerQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
         return query(collection(firestore, 'wholesalers'), where('adminUids', 'array-contains', user.uid));
@@ -29,11 +29,20 @@ export default function AdminOrdersPage() {
     const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<Wholesaler>(wholesalerQuery);
     const wholesaler = wholesalers?.[0];
 
+    // 2. Fetch Orders for this Wholesaler
     const ordersQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
+        // The memberUids check is sufficient and secure
         return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), where('status', '==', 'Εκκρεμής'), orderBy('date', 'desc'));
     }, [firestore, user]);
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
+
+    // 3. Fetch Wholesaler's products for the export function
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesaler) return null;
+        return collection(firestore, 'wholesalers', wholesaler.id, 'products');
+    }, [firestore, wholesaler]);
+    const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
 
 
     const [nextSevenDays, setNextSevenDays] = useState<{ date: Date; dateString: string; dayName: string; formattedDate: string; }[]>([]);
@@ -83,6 +92,15 @@ export default function AdminOrdersPage() {
             return;
         }
 
+        if (!products) {
+            toast({
+                title: "Φόρτωση προϊόντων",
+                description: "Παρακαλώ περιμένετε να φορτωθεί ο κατάλογος προϊόντων πριν την εξαγωγή.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         const exportData = ordersForDay.flatMap(order => {
             const commonData = {
                 'ID Παραγγελίας': order.id,
@@ -103,7 +121,7 @@ export default function AdminOrdersPage() {
                 }];
             }
             return order.items.map(item => {
-                const product = products.find(p => p.id === item.productId);
+                const product = products.find(p => p.id === item.productId); // USE LIVE PRODUCTS
                 return {
                     ...commonData,
                     'Κωδικός Προϊόντος': product?.code || '-',
@@ -130,6 +148,8 @@ export default function AdminOrdersPage() {
         const fileName = `Παραγγελίες_${selectedDayInfo?.dayName}_${selectedDayInfo?.formattedDate.replace('/', '-')}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
+    
+    const isLoading = isLoadingOrders || isLoadingWholesalers || isLoadingProducts; // Add products loading
 
     return (
         <div className="space-y-4">
@@ -155,7 +175,7 @@ export default function AdminOrdersPage() {
                     
                     <TabsContent value={activeTab} className="mt-4">
                          <div className="space-y-4">
-                            {isLoadingOrders || isLoadingWholesalers ? (
+                            {isLoading ? ( // Use combined loading state
                                 <div className="flex items-center justify-center p-8">
                                     <Loader2 className="h-8 w-8 animate-spin" />
                                 </div>
