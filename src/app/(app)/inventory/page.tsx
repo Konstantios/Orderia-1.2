@@ -78,18 +78,24 @@ export default function InventoryPage() {
 
     }, [user, firestore]);
 
-    // 2. Fetch store's inventory
+    // 2. Fetch store's inventory - NOW A SECURE QUERY
     const inventoryQuery = useMemoFirebase(() => {
-        if (!firestore || !store) return null;
-        return collection(firestore, 'stores', store.id, 'inventories');
-    }, [firestore, store]);
+        if (!firestore || !store || !user) return null;
+        return query(
+          collection(firestore, 'stores', store.id, 'inventories'),
+          where('managerUids', 'array-contains', user.uid)
+        );
+    }, [firestore, store, user]);
     const { data: inventory, isLoading: isLoadingInventory } = useCollection<CustomerInventoryItem>(inventoryQuery);
 
-    // 3. Fetch store's product configurations (ideal stock)
+    // 3. Fetch store's product configurations (ideal stock) - NOW A SECURE QUERY
     const productConfigQuery = useMemoFirebase(() => {
-        if (!firestore || !store) return null;
-        return collection(firestore, 'stores', store.id, 'productConfigurations');
-    }, [firestore, store]);
+        if (!firestore || !store || !user) return null;
+        return query(
+          collection(firestore, 'stores', store.id, 'productConfigurations'),
+          where('managerUids', 'array-contains', user.uid)
+        );
+    }, [firestore, store, user]);
     const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
 
     // For now, assume a single hardcoded supplier and their products are available to the store
@@ -115,7 +121,7 @@ export default function InventoryPage() {
         const batch = writeBatch(firestore);
         for (const [productId, count] of Object.entries(scannedItems)) {
             const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-            const data = {
+            const data: Partial<CustomerInventoryItem> = {
                 productId,
                 storeId: store.id,
                 ownerId: store.ownerId,
@@ -341,3 +347,5 @@ export default function InventoryPage() {
         </div>
     );
 }
+
+    

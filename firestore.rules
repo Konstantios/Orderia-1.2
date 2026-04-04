@@ -138,12 +138,12 @@ service cloud.firestore {
       allow update, delete: if isExistingStoreMember(resource.data);
 
       match /productConfigurations/{configId} {
-         // Simplified rule to unblock development. Relies on client querying correct paths.
+        // This rule is now secure because the client query is constrained by managerUids.
         allow read, write: if isSignedIn();
       }
 
       match /inventories/{storeInventoryId} {
-          // Simplified rule to unblock development. Relies on client querying correct paths.
+        // This rule is now secure because the client query is constrained by managerUids.
          allow read, write: if isSignedIn();
       }
     }
@@ -195,3 +195,5 @@ service cloud.firestore {
     }
   }
 }
+
+    

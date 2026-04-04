@@ -60,6 +60,8 @@ export interface CustomerInventoryItem {
   productId: string;
   storeId: string;
   currentStock: number;
+  ownerId: string;
+  managerUids: string[];
   lastAction?: {
     type: 'in' | 'out' | 'counting';
     value: number;
@@ -72,6 +74,8 @@ export interface StoreProductConfiguration {
   idealStock: number;
   defaultOrderQuantity?: number;
   customPrice?: number;
+  ownerId: string;
+  managerUids: string[];
 }
 
 export interface OrderItem {
@@ -138,3 +142,5 @@ export interface Notification {
   date: string;
   read: boolean;
 }
+
+    
