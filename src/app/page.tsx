@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, where, updateDoc, getDoc, arrayUnion, addDoc } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { wholesalerStock } from '@/lib/data';
 
@@ -143,8 +143,10 @@ export default function LoginPage() {
     });
   };
   
-  const handleRegisterBusiness = (e: React.FormEvent) => {
+  const handleRegisterBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!firestore || !auth) return;
+
     const formData = new FormData(e.target as HTMLFormElement);
     const businessType = formData.get('businessType') as string;
     const businessName = formData.get('businessName') as string;
@@ -153,8 +155,8 @@ export default function LoginPage() {
     const email = formData.get('adminEmail') as string;
     const password = formData.get('adminPassword') as string;
 
-    if (!businessName || !taxId || !ownerName || !email || !password) {
-        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Παρακαλώ συμπληρώστε όλα τα πεδία.' });
+    if (!email || !password) {
+        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Το email και ο κωδικός είναι υποχρεωτικά.' });
         return;
     }
 
@@ -167,103 +169,147 @@ export default function LoginPage() {
         return;
     }
 
-    const onSuccess = async (user: User) => {
-      if (!firestore) return;
+    try {
+        const requestsRef = collection(firestore, 'joinRequests');
+        const q = query(requestsRef, where("requesterEmail", "==", email), where("status", "==", "approved"));
+        const querySnapshot = await getDocs(q);
 
-      const collectionPath = businessType === 'store' ? 'stores' : 'wholesalers';
-      const colRef = collection(firestore, collectionPath);
-      
-      let newDocData: any;
+        if (!querySnapshot.empty) {
+            // --- Approved request flow ---
+            const joinRequestDoc = querySnapshot.docs[0];
+            const joinRequest = { id: joinRequestDoc.id, ...joinRequestDoc.data() };
 
-      if (businessType === 'store') {
-           newDocData = {
-              businessName: businessName,
-              taxId: taxId,
-              ownerName: ownerName,
-              email: email,
-              phone: '',
-              address: '',
-              ownerId: user.uid,
-              managerUids: [user.uid],
-          };
-      } else { // supplier
-          const supplierCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-          newDocData = {
-              companyName: businessName,
-              taxId: taxId,
-              email: email,
-              ownerId: user.uid,
-              adminUids: [user.uid],
-              phone: '',
-              address: '',
-              supplierCode: supplierCode,
-              productCategories: [],
-              serviceArea: '',
-              description: '',
-              orderAcceptanceHours: '',
-              logoUrl: ''
-          };
-      }
+            const onJoinSuccess = async (user: User) => {
+                if (!firestore) return;
 
-      try {
-          const newDocRef = await addDocumentNonBlocking(colRef, newDocData);
+                const businessCollectionPath = joinRequest.businessType === 'store' ? 'stores' : 'wholesalers';
+                const memberField = joinRequest.businessType === 'store' ? 'managerUids' : 'adminUids';
+                const businessDocRef = doc(firestore, businessCollectionPath, joinRequest.businessId);
 
-          // If it's the dummy supplier, seed its data.
-          if (newDocRef && businessType === 'supplier' && email === 'admin@frozenfoods.gr') {
-              const wholesalerId = newDocRef.id;
-              
-              // Create warehouse
-              const warehousesRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses');
-              const warehouseData = {
-                name: 'Αποθήκη 1',
-                wholesalerId,
-                ownerId: user.uid,
-                adminUids: [user.uid],
-              };
-              const warehouseDocRef = await addDocumentNonBlocking(warehousesRef, warehouseData);
-
-              if(warehouseDocRef) {
-                const warehouseId = warehouseDocRef.id;
-
-                // Seed inventory
-                const inventoryRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories');
-                const batch = writeBatch(firestore);
+                await updateDoc(businessDocRef, {
+                    [memberField]: arrayUnion(user.uid)
+                });
                 
-                wholesalerStock.forEach(stockItem => {
-                    const productDocRef = doc(inventoryRef, stockItem.productId);
-                    const initialData = {
-                        productId: stockItem.productId,
-                        wholesalerId: wholesalerId,
-                        warehouseId: warehouseId,
-                        quantity: stockItem.quantity,
-                        idealStock: stockItem.idealStock,
+                const requestRef = doc(firestore, 'joinRequests', joinRequest.id);
+                await updateDoc(requestRef, { status: 'completed' });
+
+                toast({
+                    title: 'Καλώς ήρθατε!',
+                    description: `Συνδεθήκατε με επιτυχία στην επιχείρηση "${joinRequest.businessName}".`
+                });
+
+                if (joinRequest.businessType === 'wholesaler') {
+                    router.push('/admin/dashboard');
+                } else {
+                    router.push('/dashboard');
+                }
+            };
+            initiateEmailSignUp(auth, email, password, onJoinSuccess);
+        } else {
+            // --- New business registration flow ---
+            if (!businessName || !taxId || !ownerName) {
+                 toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Για νέα επιχείρηση, συμπληρώστε όλα τα πεδία.' });
+                 return;
+            }
+
+            const onCreateSuccess = async (user: User) => {
+                if (!firestore) return;
+
+                const collectionPath = businessType === 'store' ? 'stores' : 'wholesalers';
+                const colRef = collection(firestore, collectionPath);
+                
+                let newDocData: any;
+
+                if (businessType === 'store') {
+                     newDocData = {
+                        businessName: businessName,
+                        taxId: taxId,
+                        ownerName: ownerName,
+                        email: email,
+                        phone: '',
+                        address: '',
+                        ownerId: user.uid,
+                        managerUids: [user.uid],
+                    };
+                } else { // supplier
+                    const supplierCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                    newDocData = {
+                        companyName: businessName,
+                        taxId: taxId,
+                        email: email,
                         ownerId: user.uid,
                         adminUids: [user.uid],
-                        lastAction: { type: 'counting', value: stockItem.quantity },
+                        phone: '',
+                        address: '',
+                        supplierCode: supplierCode,
+                        productCategories: [],
+                        serviceArea: '',
+                        description: '',
+                        orderAcceptanceHours: '',
+                        logoUrl: ''
                     };
-                    batch.set(productDocRef, initialData);
-                });
-                await batch.commit();
-              }
-          }
+                }
 
-          toast({
-              title: 'Η Επιχείρηση Καταχωρήθηκε!',
-              description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
-          });
-          setIsRequestDialogOpen(false);
+                try {
+                    const newDocRef = await addDoc(colRef, newDocData);
 
-      } catch (error) {
-          console.error("Error creating business document:", error);
-          toast({
-              variant: 'destructive',
-              title: 'Σφάλμα Βάσης Δεδομένων',
-              description: 'Δεν ήταν δυνατή η αποθήκευση της επιχείρησής σας.'
-          });
-      }
-  };
+                    // If it's the dummy supplier, seed its data.
+                    if (newDocRef && businessType === 'supplier' && email === 'admin@frozenfoods.gr') {
+                        const wholesalerId = newDocRef.id;
+                        
+                        const warehousesRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses');
+                        const warehouseData = {
+                          name: 'Αποθήκη 1',
+                          wholesalerId,
+                          ownerId: user.uid,
+                          adminUids: [user.uid],
+                        };
+                        const warehouseDocRef = await addDoc(warehousesRef, warehouseData);
 
-    initiateEmailSignUp(auth, email, password, onSuccess);
+                        if(warehouseDocRef) {
+                          const warehouseId = warehouseDocRef.id;
+                          const inventoryRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories');
+                          const batch = writeBatch(firestore);
+                          
+                          wholesalerStock.forEach(stockItem => {
+                              const productDocRef = doc(inventoryRef, stockItem.productId);
+                              const initialData = {
+                                  productId: stockItem.productId,
+                                  wholesalerId: wholesalerId,
+                                  warehouseId: warehouseId,
+                                  quantity: stockItem.quantity,
+                                  idealStock: stockItem.idealStock,
+                                  ownerId: user.uid,
+                                  adminUids: [user.uid],
+                                  lastAction: { type: 'counting', value: stockItem.quantity },
+                              };
+                              batch.set(productDocRef, initialData);
+                          });
+                          await batch.commit();
+                        }
+                    }
+
+                    toast({
+                        title: 'Η Επιχείρηση Καταχωρήθηκε!',
+                        description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
+                    });
+                    setIsRequestDialogOpen(false);
+
+                } catch (error) {
+                    console.error("Error creating business document:", error);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Σφάλμα Βάσης Δεδομένων',
+                        description: 'Δεν ήταν δυνατή η αποθήκευση της επιχείρησής σας.'
+                    });
+                }
+            };
+            initiateEmailSignUp(auth, email, password, onCreateSuccess);
+        }
+    } catch (error) {
+        console.error("Error during registration process:", error);
+        toast({ variant: 'destructive', title: 'Σφάλμα Εγγραφής', description: 'Προέκυψε ένα απρόσμενο σφάλμα. Δοκιμάστε ξανά.' });
+    }
   };
 
 
@@ -427,15 +473,15 @@ export default function LoginPage() {
                                 </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="businessName">Επωνυμία Επιχείρησης</Label>
-                                     <Input id="businessName" name="businessName" required/>
+                                     <Input id="businessName" name="businessName" />
                                  </div>
                                   <div className="space-y-2">
                                      <Label htmlFor="vat">ΑΦΜ</Label>
-                                     <Input id="vat" name="vat" required/>
+                                     <Input id="vat" name="vat" />
                                  </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="adminName">Το Ονοματεπώνυμό σας</Label>
-                                     <Input id="adminName" name="adminName" required/>
+                                     <Input id="adminName" name="adminName" />
                                  </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="adminEmail">Το Email σας</Label>
@@ -459,5 +505,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
-    
