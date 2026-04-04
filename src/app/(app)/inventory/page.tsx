@@ -213,42 +213,46 @@ export default function InventoryPage() {
                                                         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                                                             <div className={cn('rounded-lg border p-2 flex flex-col justify-center items-center', getStockColor(currentStock, idealStock))}>
                                                                 <p className="text-xs font-semibold uppercase mb-1">ΑΠΟΘΕΜΑ</p>
-                                                                <div className="flex items-center justify-center gap-1">
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleStockChange(id, String(currentStock - 1))}>
-                                                                        <Minus className="h-4 w-4" />
-                                                                    </Button>
+                                                                <div className="flex items-center justify-center gap-2">
                                                                     <Input
                                                                         key={`stock-${id}-${currentStock}`}
                                                                         type="number"
                                                                         defaultValue={currentStock}
                                                                         onBlur={(e) => handleStockChange(id, e.target.value)}
                                                                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                        className="w-20 h-auto p-0 text-3xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                         min="0"
                                                                     />
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleStockChange(id, String(currentStock + 1))}>
-                                                                        <Plus className="h-4 w-4" />
-                                                                    </Button>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleStockChange(id, String(currentStock + 1))}>
+                                                                            <Plus className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleStockChange(id, String(currentStock - 1))}>
+                                                                            <Minus className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center items-center">
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">ΙΔΑΝΙΚΟ</p>
-                                                                <div className="flex items-center justify-center gap-1">
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleIdealStockChange(id, String(idealStock - 1))}>
-                                                                        <Minus className="h-4 w-4" />
-                                                                    </Button>
+                                                                <div className="flex items-center justify-center gap-2">
                                                                     <Input
                                                                         key={`ideal-${id}-${idealStock}`}
                                                                         type="number"
                                                                         defaultValue={idealStock}
                                                                         onBlur={(e) => handleIdealStockChange(id, e.target.value)}
                                                                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                        className="w-20 h-auto p-0 text-3xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                         min="0"
                                                                     />
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full shrink-0" onClick={() => handleIdealStockChange(id, String(idealStock + 1))}>
-                                                                        <Plus className="h-4 w-4" />
-                                                                    </Button>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleIdealStockChange(id, String(idealStock + 1))}>
+                                                                            <Plus className="h-4 w-4" />
+                                                                        </Button>
+                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleIdealStockChange(id, String(idealStock - 1))}>
+                                                                            <Minus className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="rounded-lg bg-muted/30 p-2">
