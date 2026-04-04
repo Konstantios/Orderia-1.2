@@ -294,14 +294,14 @@ export default function AdminWarehousePage() {
                                                             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                                                                 <div className={cn('rounded-lg border p-2 flex flex-col justify-center items-center', getStockColor(currentStock, idealStock))}>
                                                                     <p className="text-xs font-semibold uppercase mb-1">ΑΠΟΘΕΜΑ</p>
-                                                                    <div className="flex items-center justify-center gap-2">
+                                                                    <div className="flex items-center justify-center gap-1">
                                                                         <Input
                                                                             key={`stock-${product.id}-${currentStock}`}
                                                                             type="number"
                                                                             defaultValue={currentStock}
                                                                             onBlur={(e) => handleCurrentStockChange(product.id, e.target.value, warehouse.id)}
                                                                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                            className="w-20 h-auto p-0 text-3xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                            className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                             min="0"
                                                                         />
                                                                         <div className="flex flex-col gap-1">
@@ -316,14 +316,14 @@ export default function AdminWarehousePage() {
                                                                 </div>
                                                                 <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center items-center">
                                                                     <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">ΙΔΑΝΙΚΟ</p>
-                                                                    <div className="flex items-center justify-center gap-2">
+                                                                    <div className="flex items-center justify-center gap-1">
                                                                         <Input
                                                                             key={`ideal-${product.id}-${idealStock}`}
                                                                             type="number"
                                                                             defaultValue={idealStock}
                                                                             onBlur={(e) => handleIdealStockChange(product.id, e.target.value, warehouse.id)}
                                                                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                            className="w-20 h-auto p-0 text-3xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                            className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                             min="0"
                                                                         />
                                                                         <div className="flex flex-col gap-1">
