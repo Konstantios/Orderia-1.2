@@ -39,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking, WithId } from "@/firebase";
-import { collection, query, where, doc } from "firebase/firestore";
+import { collection, query, where, doc, writeBatch, arrayUnion } from "firebase/firestore";
 
 const teamMembersData = [
     { id: '1', name: 'Νίκος Παπαδόπουλος', email: 'admin@frozenfoods.gr', role: 'Διαχειριστής' },
@@ -47,6 +47,12 @@ const teamMembersData = [
     { id: '3', name: 'Γιάννης Αντωνίου', email: 'giannis@frozenfoods.gr', role: 'Πωλητής' },
 ]
 
+type JoinRequest = {
+    requesterName: string;
+    requesterUid: string;
+    businessId: string;
+    businessType: 'store' | 'wholesaler';
+}
 
 export default function AdminTeamPage() {
     const { toast } = useToast();
@@ -86,20 +92,33 @@ export default function AdminTeamPage() {
         setIsInviteDialogOpen(false); // Close the dialog
     };
 
-    const handleRequest = (request: WithId<{requesterName: string}>, accepted: boolean) => {
+    const handleRequest = (request: WithId<JoinRequest>, accepted: boolean) => {
         if (!firestore) return;
         
         const requestRef = doc(firestore, 'joinRequests', request.id);
-        const newStatus = accepted ? 'approved' : 'rejected';
 
-        updateDocumentNonBlocking(requestRef, { status: newStatus });
-
-        if(accepted) {
-             toast({
-                title: "Το Αίτημα Εγκρίθηκε",
-                description: `Ο χρήστης ${request.requesterName} μπορεί πλέον να εγγραφεί.`,
+        if (accepted) {
+            const businessDocRef = doc(firestore, 'wholesalers', request.businessId);
+            const batch = writeBatch(firestore);
+            
+            batch.update(businessDocRef, {
+                adminUids: arrayUnion(request.requesterUid)
             });
-        } else {
+            
+            batch.update(requestRef, { status: 'approved' });
+
+            batch.commit().then(() => {
+                toast({
+                    title: "Το Αίτημα Εγκρίθηκε",
+                    description: `Ο χρήστης ${request.requesterName} προστέθηκε στην ομάδα.`,
+                });
+            }).catch(err => {
+                console.error("Error approving request: ", err);
+                toast({ variant: 'destructive', title: "Σφάλμα", description: "Δεν ήταν δυνατή η έγκριση του αιτήματος." });
+            });
+
+        } else { // Rejected
+            updateDocumentNonBlocking(requestRef, { status: 'rejected' });
             toast({
                 variant: 'destructive',
                 title: "Το Αίτημα Απορρίφθηκε",
