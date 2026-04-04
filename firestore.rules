@@ -208,7 +208,7 @@ service cloud.firestore {
       match /productConfigurations/{configId} {
         allow get: if isStoreMember(resource.data);
         allow list: if canAccessStoreSubcollection(storeId);
-        allow create: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == storeId;
+        allow create: if isSignedIn() && request.resource.data.storeId == storeId && request.resource.data.ownerId == request.auth.uid;
         allow update: if isExistingStoreMember(resource.data) && request.resource.data.storeId == resource.data.storeId;
         allow delete: if isExistingStoreMember(resource.data);
       }
@@ -222,8 +222,8 @@ service cloud.firestore {
        */
       match /inventories/{storeInventoryId} {
         allow get, list: if canAccessStoreSubcollection(storeId);
-        allow create: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == storeId;
-        allow update: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == resource.data.storeId;
+        allow create: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == storeId && request.resource.data.ownerId == request.auth.uid;
+        allow update: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == resource.data.storeId && request.resource.data.ownerId == request.auth.uid;
         allow delete: if canAccessStoreSubcollection(storeId);
       }
     }
@@ -234,7 +234,8 @@ service cloud.firestore {
     
     match /joinRequests/{requestId} {
       allow create: if true; // Public submission form
-      allow get, list: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
+      allow get: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
+      allow list: if isSignedIn();
       allow update, delete: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
     }
 
@@ -299,5 +300,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
