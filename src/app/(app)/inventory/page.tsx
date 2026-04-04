@@ -4,18 +4,23 @@ import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { products as allProducts, customerInventory as initialInventory, customers } from '@/lib/data';
+import { products as allProducts, customers } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Star } from 'lucide-react';
+import { Star, Loader2 } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
 import { Separator } from '@/components/ui/separator';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryEntry } from './entry';
 import { InventoryExit } from './exit';
+import { useFirebase, useCollection, useFirestore, useMemoFirebase, setDocumentNonBlocking, type WithId } from '@/firebase';
+import { collection, query, where, doc, writeBatch, increment } from 'firebase/firestore';
+import type { Store, CustomerInventoryItem } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 
 const getStockColor = (current: number, ideal: number) => {
@@ -34,13 +39,35 @@ const getStockColor = (current: number, ideal: number) => {
 };
 
 export default function InventoryPage() {
-    const [supplier, setSupplier] = useState(customers[0]);
-    const [inventory, setInventory] = useState(initialInventory);
     const { toast } = useToast();
+    const { user, isUserLoading, firestore } = useFirebase();
+
+    // 1. Fetch user's store
+    const storeQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
+    }, [firestore, user]);
+    const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
+    const store = stores?.[0];
+
+    // 2. Fetch store's inventory
+    const inventoryQuery = useMemoFirebase(() => {
+        if (!firestore || !store) return null;
+        return collection(firestore, 'stores', store.id, 'inventories');
+    }, [firestore, store]);
+    const { data: inventory, isLoading: isLoadingInventory } = useCollection<CustomerInventoryItem>(inventoryQuery);
+
+    // For now, assume a single hardcoded supplier and their products are available to the store
+    const [supplier, setSupplier] = useState(customers[0]);
     const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
     const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
+    
+    const handleSync = async (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out') => {
+        if (!firestore || !store) {
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν βρέθηκε το κατάστημα.' });
+            return;
+        }
 
-    const handleCountingSync = (scannedItems: Record<string, number>) => {
         if (Object.keys(scannedItems).length === 0) {
             toast({
                 variant: 'destructive',
@@ -50,90 +77,55 @@ export default function InventoryPage() {
             return;
         }
 
-        setInventory(prevInventory => {
-            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
-
-            for (const [productId, count] of Object.entries(scannedItems)) {
-                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
-                inventoryMap.set(productId, {
-                    ...existingItem,
-                    currentStock: count,
-                    lastAction: { type: 'καταμέτρηση', value: count }
-                });
+        const batch = writeBatch(firestore);
+        for (const [productId, count] of Object.entries(scannedItems)) {
+            const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
+            const lastAction = { type: type, value: count };
+            if (type === 'counting') {
+                batch.set(docRef, { productId, currentStock: count, lastAction }, { merge: true });
+            } else if (type === 'in') {
+                batch.set(docRef, { productId, currentStock: increment(count), lastAction }, { merge: true });
+            } else if (type === 'out') {
+                batch.set(docRef, { productId, currentStock: increment(-count), lastAction }, { merge: true });
             }
-            
-            return Array.from(inventoryMap.values());
-        });
+        }
+        await batch.commit();
 
+        const title = {
+            'counting': 'Συγχρονισμός Ολοκληρώθηκε!',
+            'in': 'Η Είσοδος Ολοκληρώθηκε!',
+            'out': 'Η Έξοδος Ολοκληρώθηκε!'
+        }[type];
+        
         toast({
-            title: 'Συγχρονισμός Ολοκληρώθηκε!',
-            description: 'Το απόθεμα ενημερώθηκε με τα αποτελέσματα της καταμέτρησης.',
+            title: title,
+            description: 'Το απόθεμα ενημερώθηκε.',
         });
-    };
-    
-    const handleInSync = (scannedItems: Record<string, number>) => {
-        if (Object.keys(scannedItems).length === 0) {
-            toast({ variant: 'destructive', title: 'Δεν υπάρχουν δεδομένα', description: 'Παρακαλώ σκανάρετε κάποια προϊόντα για είσοδο.' });
-            return;
-        }
-        setInventory(prevInventory => {
-            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
-            for (const [productId, count] of Object.entries(scannedItems)) {
-                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
-                const newStock = existingItem.currentStock + count;
-                inventoryMap.set(productId, {
-                    ...existingItem,
-                    currentStock: newStock,
-                    lastAction: { type: 'είσοδος', value: count }
-                });
-            }
-            return Array.from(inventoryMap.values());
-        });
-        toast({ title: 'Η Είσοδος Ολοκληρώθηκε!', description: 'Το απόθεμα ενημερώθηκε.' });
-    };
-
-    const handleOutSync = (scannedItems: Record<string, number>) => {
-        if (Object.keys(scannedItems).length === 0) {
-            toast({ variant: 'destructive', title: 'Δεν υπάρχουν δεδομένα', description: 'Παρακαλώ σκανάρετε κάποια προϊόντα για έξοδο.' });
-            return;
-        }
-        setInventory(prevInventory => {
-            const inventoryMap = new Map(prevInventory.map(item => [item.productId, item]));
-            for (const [productId, count] of Object.entries(scannedItems)) {
-                const existingItem = inventoryMap.get(productId) || { productId, currentStock: 0 };
-                const newStock = Math.max(0, existingItem.currentStock - count);
-                inventoryMap.set(productId, {
-                    ...existingItem,
-                    currentStock: newStock,
-                    lastAction: { type: 'έξοδος', value: count }
-                });
-            }
-            return Array.from(inventoryMap.values());
-        });
-        toast({ title: 'Η Έξοδος Ολοκληρώθηκε!', description: 'Το απόθεμα ενημερώθηκε.' });
     };
 
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
         const idealStock = supplier.products.find(cp => cp.productId === productId)?.idealStock || 0;
-        const inventoryItem = inventory.find(i => i.productId === productId);
+        const inventoryItem = inventory?.find(i => i.id === productId);
         const currentStock = inventoryItem?.currentStock || 0;
         const lastAction = inventoryItem?.lastAction;
         const suggestion = Math.max(0, idealStock - currentStock);
         return { product, idealStock, currentStock, suggestion, lastAction };
     };
     
-    const handleIdealStockChange = (productId: string, value: string) => {
-        const newIdealStock = parseInt(value, 10);
-        const stockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
-        
-        setSupplier(prevSupplier => {
-            const updatedProducts = prevSupplier.products.map(p => 
-                p.productId === productId ? { ...p, idealStock: stockValue } : p
-            );
-            return { ...prevSupplier, products: updatedProducts };
-        });
-    };
+    if (isUserLoading || isLoadingStores) {
+        return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
+    
+    if (!store && !isLoadingStores) {
+        return (
+            <div className="text-center py-10">
+                <h2 className="text-2xl font-bold">Δεν βρέθηκε κατάστημα</h2>
+                <p className="text-muted-foreground mt-2">Φαίνεται πως ο λογαριασμός σας δεν είναι συνδεδεμένος με κάποιο κατάστημα. Μπορείτε να δημιουργήσετε ένα από την αρχική σελίδα.</p>
+                <Button asChild className="mt-4"><Link href="/">Επιστροφή</Link></Button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -170,14 +162,15 @@ export default function InventoryPage() {
                                 <AccordionContent className="p-0">
                                     <div className="space-y-4 pt-4">
                                         <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Λιστα προϊοντων</h2>
-                                        {inventoryProducts.map(({ id }) => {
+                                        {isLoadingInventory && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
+                                        {!isLoadingInventory && inventoryProducts.map(({ id }) => {
                                             const { product, idealStock, currentStock, suggestion, lastAction } = getProductData(id);
                                             if (!product) return null;
 
                                             const lastActionInfo = lastAction ? {
-                                                'είσοδος': { text: 'Είσοδος', color: 'text-green-500' },
-                                                'έξοδος': { text: 'Έξοδος', color: 'text-destructive' },
-                                                'καταμέτρηση': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
+                                                'in': { text: 'Είσοδος', color: 'text-green-500' },
+                                                'out': { text: 'Έξοδος', color: 'text-destructive' },
+                                                'counting': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
                                             }[lastAction.type] : null;
 
                                             return (
@@ -199,8 +192,8 @@ export default function InventoryPage() {
                                                                 <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
                                                                 <Input
                                                                     type="number"
+                                                                    readOnly
                                                                     value={idealStock}
-                                                                    onChange={(e) => handleIdealStockChange(product.id, e.target.value)}
                                                                     className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                                                                     min="0"
                                                                 />
@@ -230,13 +223,13 @@ export default function InventoryPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="counting" className="mt-6">
-                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleCountingSync} />
+                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'counting')} />
                 </TabsContent>
                 <TabsContent value="in" className="mt-6">
-                    <InventoryEntry products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleInSync} />
+                    <InventoryEntry products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'in')} />
                 </TabsContent>
                  <TabsContent value="out" className="mt-6">
-                    <InventoryExit products={inventoryProducts} customer={supplier} inventory={inventory} onSync={handleOutSync} />
+                    <InventoryExit products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'out')} />
                 </TabsContent>
                 <TabsContent value="database" className="mt-6">
                     <InventoryDatabase products={inventoryProducts} />

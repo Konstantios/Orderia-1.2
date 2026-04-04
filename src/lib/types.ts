@@ -43,10 +43,11 @@ export interface Store {
 }
 
 export interface CustomerInventoryItem {
+  id: string;
   productId: string;
   currentStock: number;
   lastAction?: {
-    type: 'είσοδος' | 'έξοδος' | 'καταμέτρηση';
+    type: 'in' | 'out' | 'counting';
     value: number;
   };
 }
@@ -67,10 +68,12 @@ export interface Order {
 }
 
 export interface WholesalerStockItem {
+  id: string;
+  productId: string;
   quantity: number;
   idealStock: number;
   lastAction?: {
-    type: 'είσοδος' | 'έξοδος' | 'καταμέτρηση';
+    type: 'in' | 'out' | 'counting';
     value: number;
   };
 }

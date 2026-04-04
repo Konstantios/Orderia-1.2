@@ -128,7 +128,7 @@ service cloud.firestore {
      */
     match /wholesalers/{wholesalerId} {
       allow get: if isWholesalerMember(resource.data);
-      allow list: if false;
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingWholesalerMember(resource.data);
       allow delete: if isExistingWholesalerMember(resource.data);
@@ -156,7 +156,7 @@ service cloud.firestore {
       match /warehouses/{warehouseId} {
         allow list, get: if canAccessWholesalerSubcollection(wholesalerId);
         allow create: if canAccessWholesalerSubcollection(wholesalerId) && request.resource.data.wholesalerId == wholesalerId;
-        allow update, delete: if isExistingWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data);
+        allow update, delete: if canAccessWholesalerSubcollection(wholesalerId);
 
         /**
          * @description Inventory records for products within a specific warehouse.
@@ -212,11 +212,11 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /inventories/{storeInventoryId} {
-        allow get: if isStoreMember(resource.data);
+        allow get: if canAccessStoreSubcollection(storeId);
         allow list: if canAccessStoreSubcollection(storeId);
         allow create: if canAccessStoreSubcollection(storeId) && request.resource.data.storeId == storeId;
-        allow update: if isExistingStoreMember(resource.data) && request.resource.data.storeId == resource.data.storeId;
-        allow delete: if isExistingStoreMember(resource.data);
+        allow update: if canAccessStoreSubcollection(storeId);
+        allow delete: if canAccessStoreSubcollection(storeId);
       }
     }
 
@@ -285,5 +285,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
