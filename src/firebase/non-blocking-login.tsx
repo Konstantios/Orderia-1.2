@@ -24,11 +24,11 @@ export function initiateEmailSignUp(
   authInstance: Auth,
   email: string,
   password: string,
-  onSuccess: (user: User) => void
+  onSuccess: (user: User) => Promise<void> | void
 ): void {
   createUserWithEmailAndPassword(authInstance, email, password)
-    .then((userCredential) => {
-      onSuccess(userCredential.user);
+    .then(async (userCredential) => {
+      await onSuccess(userCredential.user);
     })
     .catch((error) => {
       let title = 'Σφάλμα Εγγραφής';

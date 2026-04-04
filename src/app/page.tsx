@@ -13,8 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
+import { wholesalerStock } from '@/lib/data';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -117,46 +118,93 @@ export default function LoginPage() {
         return;
     }
 
-    const onSuccess = (user: User) => {
-        if (!firestore) return;
+    const onSuccess = async (user: User) => {
+      if (!firestore) return;
 
-        if (businessType === 'store') {
-            const storesColRef = collection(firestore, 'stores');
-            addDocumentNonBlocking(storesColRef, {
-                businessName: businessName,
-                taxId: taxId,
-                ownerName: ownerName,
-                email: email,
-                phone: '',
-                address: '',
-                ownerId: user.uid,
-            });
-        } else if (businessType === 'supplier') {
-            const wholesalersColRef = collection(firestore, 'wholesalers');
-            const supplierCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-            addDocumentNonBlocking(wholesalersColRef, {
-                companyName: businessName,
-                taxId: taxId,
-                email: email,
-                ownerId: user.uid,
-                adminUids: [user.uid],
-                phone: '',
-                address: '',
-                supplierCode: supplierCode,
-                productCategories: [],
-                serviceArea: '',
-                description: '',
-                orderAcceptanceHours: '',
-                logoUrl: ''
-            });
-        }
-        
-        toast({
-            title: 'Η Επιχείρηση Καταχωρήθηκε!',
-            description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
-        });
-        setIsRequestDialogOpen(false);
-    };
+      const collectionPath = businessType === 'store' ? 'stores' : 'wholesalers';
+      const colRef = collection(firestore, collectionPath);
+      
+      let newDocData: any;
+
+      if (businessType === 'store') {
+           newDocData = {
+              businessName: businessName,
+              taxId: taxId,
+              ownerName: ownerName,
+              email: email,
+              phone: '',
+              address: '',
+              ownerId: user.uid,
+              managerUids: [user.uid],
+          };
+      } else { // supplier
+          const supplierCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          newDocData = {
+              companyName: businessName,
+              taxId: taxId,
+              email: email,
+              ownerId: user.uid,
+              adminUids: [user.uid],
+              phone: '',
+              address: '',
+              supplierCode: supplierCode,
+              productCategories: [],
+              serviceArea: '',
+              description: '',
+              orderAcceptanceHours: '',
+              logoUrl: ''
+          };
+      }
+
+      try {
+          const newDocRef = await addDocumentNonBlocking(colRef, newDocData);
+
+          // If it's the dummy supplier, seed its data.
+          if (newDocRef && businessType === 'supplier' && email === 'admin@frozenfoods.gr') {
+              const wholesalerId = newDocRef.id;
+              
+              // Create warehouse
+              const warehousesRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses');
+              const warehouseDocRef = await addDocumentNonBlocking(warehousesRef, { name: 'Αποθήκη 1', wholesalerId });
+
+              if(warehouseDocRef) {
+                const warehouseId = warehouseDocRef.id;
+
+                // Seed inventory
+                const inventoryRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories');
+                const batch = writeBatch(firestore);
+                
+                wholesalerStock.forEach(stockItem => {
+                    const productDocRef = doc(inventoryRef, stockItem.productId);
+                    const initialData = {
+                        productId: stockItem.productId,
+                        wholesalerId: wholesalerId,
+                        warehouseId: warehouseId,
+                        quantity: stockItem.quantity,
+                        idealStock: stockItem.idealStock,
+                        lastAction: { type: 'counting', value: stockItem.quantity },
+                    };
+                    batch.set(productDocRef, initialData);
+                });
+                await batch.commit();
+              }
+          }
+
+          toast({
+              title: 'Η Επιχείρηση Καταχωρήθηκε!',
+              description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
+          });
+          setIsRequestDialogOpen(false);
+
+      } catch (error) {
+          console.error("Error creating business document:", error);
+          toast({
+              variant: 'destructive',
+              title: 'Σφάλμα Βάσης Δεδομένων',
+              description: 'Δεν ήταν δυνατή η αποθήκευση της επιχείρησής σας.'
+          });
+      }
+  };
 
     initiateEmailSignUp(auth, email, password, onSuccess);
   };
