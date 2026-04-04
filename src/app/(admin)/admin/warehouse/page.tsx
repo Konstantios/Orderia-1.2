@@ -302,9 +302,8 @@ export default function AdminWarehousePage() {
                                 <AdminWarehouseExit products={allProducts} stock={warehouse.stock} onSync={(items) => handleSync(items, 'out', warehouse.id)} />
                             </TabsContent>
                         </Tabs>
-                    </div>
-                </TabsContent>
-            ))}
+                    </TabsContent>
+                ))}
 
             <TabsContent value="database" className="mt-6">
                 <AdminWarehouseDatabase products={allProducts} />
