@@ -184,7 +184,7 @@ service cloud.firestore {
      */
     match /stores/{storeId} {
       allow get: if isStoreMember(resource.data);
-      allow list: if false;
+      allow list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingStoreMember(resource.data);
       allow delete: if isExistingStoreMember(resource.data);
@@ -285,3 +285,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
