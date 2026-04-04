@@ -79,6 +79,13 @@ service cloud.firestore {
         (request.auth.uid == docData.wholesalerOwnerId || (docData.keys().hasAny(['wholesalerAdminUids']) && request.auth.uid in docData.wholesalerAdminUids))
       );
     }
+    
+    function isBusinessOwner(businessId, businessType) {
+      let path = businessType == 'store' ? /databases/$(database)/documents/stores/$(businessId) : /databases/$(database)/documents/wholesalers/$(businessId);
+      let doc = get(path).data;
+      return (businessType == 'store' && isStoreMember(doc)) || (businessType == 'wholesaler' && isWholesalerMember(doc));
+    }
+
 
     /**
      * Checks if an existing collaborative document can be accessed by a member of either party.
@@ -224,6 +231,12 @@ service cloud.firestore {
     // --------------------------------------------------------------------
     // Collaborative Collections
     // --------------------------------------------------------------------
+    
+    match /joinRequests/{requestId} {
+      allow create: if true; // Public submission form
+      allow get, list: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
+      allow update, delete: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
+    }
 
     /**
      * @description Manages connection requests between stores and wholesalers.
@@ -286,3 +299,5 @@ service cloud.firestore {
     }
   }
 }
+
+    

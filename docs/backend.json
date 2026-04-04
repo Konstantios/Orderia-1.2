@@ -163,6 +163,54 @@
         "address"
       ]
     },
+    "JoinRequest": {
+      "title": "Join Request",
+      "type": "object",
+      "description": "A request from a user to join a business team (Store or Wholesaler).",
+      "properties": {
+        "businessId": {
+          "type": "string"
+        },
+        "businessName": {
+          "type": "string"
+        },
+        "businessType": {
+          "type": "string",
+          "enum": [
+            "store",
+            "wholesaler"
+          ]
+        },
+        "requesterName": {
+          "type": "string"
+        },
+        "requesterEmail": {
+          "type": "string",
+          "format": "email"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "businessId",
+        "businessName",
+        "businessType",
+        "requesterName",
+        "requesterEmail",
+        "status",
+        "createdAt"
+      ]
+    },
     "SupplierStoreRequest": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "SupplierStoreRequest",
@@ -647,6 +695,16 @@
         }
       },
       {
+        "path": "/joinRequests/{joinRequestId}",
+        "definition": {
+          "entityName": "JoinRequest",
+          "schema": {
+            "$ref": "#/backend/entities/JoinRequest"
+          },
+          "description": "Top-level collection for managing user requests to join a business team. Includes denormalized businessId to allow business owners to query for their requests."
+        }
+      },
+      {
         "path": "/supplierStoreRequests/{supplierStoreRequestId}",
         "definition": {
           "entityName": "SupplierStoreRequest",
@@ -715,6 +773,7 @@
         }
       }
     ],
-    "reasoning": "The proposed Firestore structure for Orderia is designed to ensure maximum security, scalability, and debuggability by strictly adhering to the core design principles, especially Authorization Independence and QAPs (Queries Are Not Filters).\n\n**Authorization Independence (CRITICAL) via Denormalization:**\nThis structure achieves Authorization Independence by explicitly denormalizing all necessary authorization context directly into each document. This eliminates the need for `get()` calls in security rules to check parent collection attributes or related documents for authorization. Instead, each document contains `ownerId`, `adminUids`, and/or `managerUids` fields for the relevant entities (Wholesaler, Store) that grant access. This strategy ensures:\n*   **Atomic Operations:** Documents can be created, updated, or deleted in batches or transactions without requiring reads of other documents for authorization, preventing deadlocks and simplifying logic.\n*   **Simplified Security Rules:** Rules become simpler, more explicit, and easier to debug, as they only need to evaluate `request.auth.uid` against the fields present in the `resource.data` of the document being accessed.\n*   **Clearer Intent:** The authorization intent is immediately visible within the document's data.\n\nExamples of denormalization for authorization:\n*   `Wholesaler` and `Store` documents will include `ownerId` (the UID of the primary owner) and `adminUids` (a list of UIDs with administrative access for that entity) or `managerUids` for stores. These fields are managed by the application logic during user/entity creation and updates.\n*   Top-level collaborative entities like `SupplierStoreRequest`, `SupplierStoreConnection`, and `Order` will denormalize the `ownerId` and relevant `adminUids` (or `managerUids`) from both the associated `Store` and `Wholesaler` entities. For example, an `Order` document will contain `storeId`, `storeOwnerId`, `storeManagerUids`, `wholesalerId`, `wholesalerOwnerId`, and `wholesalerAdminUids`. This allows direct authorization checks for both the store and wholesaler roles without `get()` operations.\n*   Documents in subcollections (e.g., `Product` under `Wholesaler`, `StoreInventory` under `Store`, `OrderItem` under `Order`) also include denormalized `ownerId` and `adminUids`/`managerUids` from their respective logical parents. This allows rules to evaluate access based on the document's own fields, even if it's part of a hierarchical path.\n\n**QAPs (Rules are not Filters) Support:**\nThis structure inherently supports QAPs by ensuring that security rules do not act as data filters. Instead, client-side queries are expected to include specific `where` clauses that correspond to the denormalized authorization fields. The security rules then only need to validate that `request.auth.uid` matches the requested authorization criteria within the document's fields. This means:\n*   **Efficient List Operations:** Clients perform targeted queries (e.g., `db.collection('orders').where('storeOwnerId', '==', currentUserUid)`). The rules then quickly verify `request.auth.uid == resource.data.storeOwnerId`, preventing broad, unfiltered reads and ensuring only authorized data is returned based on the query, not by filtering after a read.\n*   **Preventing Data Leakage:** Since every document carries its own authorization context, unauthorized data cannot be accidentally exposed through broad queries that rules might otherwise struggle to filter efficiently or correctly.\n\n**Structural Segregation:**\n*   **Hierarchical Paths for Owned Data:** `/wholesalers/{wholesalerId}/products`, `/stores/{storeId}/inventories` clearly segregate data based on its primary owner (wholesaler or store), simplifying access control to all documents within that hierarchy.\n*   **Top-Level Collections for Collaborative Entities:** `SupplierStoreRequest`, `SupplierStoreConnection`, and `Order` are placed as top-level collections. This allows for flexible querying by either party (`storeId` or `wholesalerId`) and simplifies QAPs for multi-party access, with denormalized authorization fields handling the actual permission checks.\n*   **Explicit State Modeling:** Entities like `SupplierStoreRequest` and `Order` use a single `status` field to represent their finite state, which simplifies rule logic compared to inferring state from multiple boolean flags.\n\n**Addressing "
+    "reasoning": "The proposed Firestore structure for Orderia is designed to ensure maximum security, scalability, and debuggability by strictly adhering to the core design principles, especially Authorization Independence and QAPs (Queries Are Not Filters).\n\n**Authorization Independence (CRITICAL) via Denormalization:**\nThis structure achieves Authorization Independence by explicitly denormalizing all necessary authorization context directly into each document. This eliminates the need for `get()` calls in security rules to check parent collection attributes or related documents for authorization. Instead, each document contains `ownerId`, `adminUids`, and/or `managerUids` fields for the relevant entities (Wholesaler, Store) that grant access. This strategy ensures:\n*   **Atomic Operations:** Documents can be created, updated, or deleted in batches or transactions without requiring reads of other documents for authorization, preventing deadlocks and simplifying logic.\n*   **Simplified Security Rules:** Rules become simpler, more explicit, and easier to debug, as they only need to evaluate `request.auth.uid` against the fields present in the `resource.data` of the document being accessed.\n*   **Clearer Intent:** The authorization intent is immediately visible within the document's data.\n\nExamples of denormalization for authorization:\n*   `Wholesaler` and `Store` documents will include `ownerId` (the UID of the primary owner) and `adminUids` (a list of UIDs with administrative access for that entity) or `managerUids` for stores. These fields are managed by the application logic during user/entity creation and updates.\n*   Top-level collaborative entities like `SupplierStoreRequest`, `SupplierStoreConnection`, and `Order` will denormalize the `ownerId` and relevant `adminUids` (or `managerUids`) from both the associated `Store` and `Wholesaler` entities. For example, an `Order` document will contain `storeId`, `storeOwnerId`, `storeManagerUids`, `wholesalerId`, `wholesalerOwnerId`, and `wholesalerAdminUids`. This allows direct authorization checks for both the store and wholesaler roles without `get()` operations.\n*   Documents in subcollections (e.g., `Product` under `Wholesaler`, `StoreInventory` under `Store`, `OrderItem` under `Order`) also include denormalized `ownerId` and `adminUids`/`managerUids` from their respective logical parents. This allows rules to evaluate access based on the document's own fields, even if it's part of a hierarchical path.\n\n**QAPs (Rules are not Filters) Support:**\nThis structure inherently supports QAPs by ensuring that security rules do not act as data filters. Instead, client-side queries are expected to include specific `where` clauses that correspond to the denormalized authorization fields. The security rules then only need to validate that `request.auth.uid` matches the requested authorization criteria within the document's fields. This means:\n*   **Efficient List Operations:** Clients perform targeted queries (e.g., `db.collection('orders').where('storeOwnerId', '==', currentUserUid)`). The rules then quickly verify `request.auth.uid == resource.data.storeOwnerId`, preventing broad, unfiltered reads and ensuring only authorized data is returned based on the query, not by filtering after a read.\n*   **Preventing Data Leakage:** Since every document carries its own authorization context, unauthorized data cannot be accidentally exposed through broad queries that rules might otherwise struggle to filter efficiently or correctly.\n\n**Structural Segregation:**\n*   **Hierarchical Paths for Owned Data:** `/wholesalers/{wholesalerId}/products`, `/stores/{storeId}/inventories` clearly segregate data based on its primary owner (wholesaler or store), simplifying access control to all documents within that hierarchy.\n*   **Top-Level Collections for Collaborative Entities:** `SupplierStoreRequest`, `SupplierStoreConnection`, `Order`, and `JoinRequest` are placed as top-level collections. This allows for flexible querying by either party (`storeId` or `wholesalerId`) and simplifies QAPs for multi-party access, with denormalized authorization fields handling the actual permission checks.\n*   **Explicit State Modeling:** Entities like `SupplierStoreRequest` and `Order` use a single `status` field to represent their finite state, which simplifies rule logic compared to inferring state from multiple boolean flags.\n\n**Addressing "
   }
 }
+    

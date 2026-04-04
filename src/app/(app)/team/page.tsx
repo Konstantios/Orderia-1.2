@@ -34,25 +34,41 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Check, X } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Check, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking, WithId } from "@/firebase";
+import { collection, query, where, doc } from "firebase/firestore";
+import type { Store } from "@/lib/types";
 
 const teamMembersData = [
     { id: '1', name: 'Φώτης Γεωργίου', email: 'store@tastebakery.gr', role: 'Ιδιοκτήτης' },
     { id: '2', name: 'Ελένη Παπαδάκη', email: 'eleni@tastebakery.gr', role: 'Υπάλληλος' },
 ]
 
-const pendingRequestsData = [
-    { id: 'req1', name: 'Κώστας Νικολάου', email: 'k.nikolaou@email.com' },
-]
-
 export default function TeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
     const [teamMembers, setTeamMembers] = useState(teamMembersData);
-    const [pendingRequests, setPendingRequests] = useState(pendingRequestsData);
+    
+    const { user, firestore, isUserLoading } = useFirebase();
+
+    // 1. Fetch user's store
+    const storeQuery = useMemoFirebase(() => {
+        if (!firestore || !user) return null;
+        return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
+    }, [firestore, user]);
+    const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
+    const store = stores?.[0];
+
+    // 2. Fetch join requests for this store
+    const requestsQuery = useMemoFirebase(() => {
+        if (!firestore || !store) return null;
+        return query(collection(firestore, 'joinRequests'), where("businessId", "==", store.id), where("status", "==", "pending"));
+    }, [firestore, store]);
+    const { data: pendingRequests, isLoading: isLoadingRequests } = useCollection<any>(requestsQuery);
+
 
     const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -69,24 +85,24 @@ export default function TeamPage() {
         setIsInviteDialogOpen(false); // Close the dialog
     };
 
-    const handleRequest = (requestId: string, accepted: boolean) => {
-        const request = pendingRequests.find(r => r.id === requestId);
-        if (!request) return;
+    const handleRequest = (request: WithId<{requesterName: string}>, accepted: boolean) => {
+        if (!firestore) return;
+        
+        const requestRef = doc(firestore, 'joinRequests', request.id);
+        const newStatus = accepted ? 'approved' : 'rejected';
 
-        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+        updateDocumentNonBlocking(requestRef, { status: newStatus });
 
         if(accepted) {
-             setTeamMembers(prev => [...prev, { id: `user-${Date.now()}`, name: request.name, email: request.email, role: 'Υπάλληλος' }])
              toast({
                 title: "Το Αίτημα Εγκρίθηκε",
-                description: `Ο χρήστης ${request.name} έχει προστεθεί στην ομάδα.`,
+                description: `Ο χρήστης ${request.requesterName} μπορεί πλέον να εγγραφεί.`,
             });
-            // In a real app, you would add the user to the team here.
         } else {
             toast({
                 variant: 'destructive',
                 title: "Το Αίτημα Απορρίφθηκε",
-                description: `Το αίτημα του χρήστη ${request.name} έχει απορριφθεί.`,
+                description: `Το αίτημα του χρήστη ${request.requesterName} έχει απορριφθεί.`,
             });
         }
     }
@@ -98,7 +114,11 @@ export default function TeamPage() {
                 <h1 className="text-lg font-semibold md:text-2xl">Διαχείριση Ομάδας</h1>
             </div>
 
-            {pendingRequests.length > 0 && (
+            {(isLoadingRequests || isLoadingStores) ? (
+                 <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+            ) : pendingRequests && pendingRequests.length > 0 && (
                  <Card className="mb-6">
                     <CardHeader>
                         <CardTitle>Εκκρεμή Αιτήματα</CardTitle>
@@ -110,14 +130,14 @@ export default function TeamPage() {
                         {pendingRequests.map((request) => (
                             <div key={request.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                 <div>
-                                    <p className="font-semibold">{request.name}</p>
-                                    <p className="text-sm text-muted-foreground">{request.email}</p>
+                                    <p className="font-semibold">{request.requesterName}</p>
+                                    <p className="text-sm text-muted-foreground">{request.requesterEmail}</p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRequest(request.id, false)}>
+                                    <Button variant="outline" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleRequest(request, false)}>
                                         <X className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="outline" size="icon" className="text-green-500 hover:text-green-500" onClick={() => handleRequest(request.id, true)}>
+                                    <Button variant="outline" size="icon" className="text-green-500 hover:text-green-500" onClick={() => handleRequest(request, true)}>
                                         <Check className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -227,3 +247,5 @@ export default function TeamPage() {
         </div>
     );
 }
+
+    

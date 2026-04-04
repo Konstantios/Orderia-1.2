@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, where } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { wholesalerStock } from '@/lib/data';
 
@@ -30,7 +30,7 @@ export default function LoginPage() {
   
   // State for joining
   const [searchAfm, setSearchAfm] = useState('');
-  const [foundBusiness, setFoundBusiness] = useState<{ name: string; afm: string } | null>(null);
+  const [foundBusiness, setFoundBusiness] = useState<{ name: string; afm: string; id: string; type: 'store' | 'wholesaler' } | null>(null);
 
   // Reset dialog state on close
   useEffect(() => {
@@ -69,29 +69,78 @@ export default function LoginPage() {
     initiateEmailSignIn(auth, email, password, onSuccess);
   };
 
-  const handleSearchBusiness = () => {
-    if (searchAfm === '111') {
-      setFoundBusiness({ name: 'Frozen Foods', afm: '111' });
-    } else if (searchAfm === '222') {
-      setFoundBusiness({ name: 'Φούρνος "Η Γεύση"', afm: '222' });
-    } else {
-      setFoundBusiness(null);
-      toast({
-        variant: 'destructive',
-        title: 'Δεν βρέθηκε επιχείρηση',
-        description: 'Παρακαλώ ελέγξτε το ΑΦΜ που εισάγατε.',
-      });
+  const handleSearchBusiness = async () => {
+    if (!firestore) return;
+    if (!searchAfm.trim()) {
+        toast({ variant: 'destructive', title: 'Εισάγετε ΑΦΜ' });
+        return;
+    }
+
+    try {
+        const storesRef = collection(firestore, 'stores');
+        const wholesalersRef = collection(firestore, 'wholesalers');
+
+        const storeQuery = query(storesRef, where("taxId", "==", searchAfm));
+        const wholesalerQuery = query(wholesalersRef, where("taxId", "==", searchAfm));
+
+        const [storeSnapshot, wholesalerSnapshot] = await Promise.all([
+            getDocs(storeQuery),
+            getDocs(wholesalerQuery)
+        ]);
+
+        if (!storeSnapshot.empty) {
+            const doc = storeSnapshot.docs[0];
+            setFoundBusiness({ id: doc.id, name: doc.data().businessName, afm: doc.data().taxId, type: 'store' });
+        } else if (!wholesalerSnapshot.empty) {
+            const doc = wholesalerSnapshot.docs[0];
+            setFoundBusiness({ id: doc.id, name: doc.data().companyName, afm: doc.data().taxId, type: 'wholesaler' });
+        } else {
+            setFoundBusiness(null);
+            toast({
+                variant: 'destructive',
+                title: 'Δεν βρέθηκε επιχείρηση',
+                description: 'Παρακαλώ ελέγξτε το ΑΦΜ που εισάγατε.',
+            });
+        }
+    } catch (error) {
+        console.error("Error searching for business:", error);
+        toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Προέκυψε σφάλμα κατά την αναζήτηση.' });
     }
   };
 
-  const handleSendRequest = () => {
-    toast({
-      title: 'Το Αίτημα Στάλθηκε!',
-      description: `Θα ειδοποιηθείτε μόλις ο διαχειριστής της "${foundBusiness?.name}" το εγκρίνει.`
+  const handleSendRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firestore || !foundBusiness) return;
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const requesterName = formData.get('joinerName') as string;
+    const requesterEmail = formData.get('joinerEmail') as string;
+
+    if (!requesterName || !requesterEmail) {
+        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Παρακαλώ συμπληρώστε το όνομα και το email σας.' });
+        return;
+    }
+
+    const joinRequestsRef = collection(firestore, 'joinRequests');
+    const newRequest = {
+        businessId: foundBusiness.id,
+        businessName: foundBusiness.name,
+        businessType: foundBusiness.type,
+        requesterName,
+        requesterEmail,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+    };
+
+    addDocumentNonBlocking(joinRequestsRef, newRequest).then(() => {
+        toast({
+          title: 'Το Αίτημα Στάλθηκε!',
+          description: `Θα ειδοποιηθείτε μόλις ο διαχειριστής της "${foundBusiness?.name}" το εγκρίνει.`
+        });
+        setFoundBusiness(null);
+        setSearchAfm('');
+        setIsRequestDialogOpen(false);
     });
-    setFoundBusiness(null);
-    setSearchAfm('');
-    setIsRequestDialogOpen(false);
   };
   
   const handleRegisterBusiness = (e: React.FormEvent) => {
@@ -331,7 +380,7 @@ export default function LoginPage() {
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="space-y-4 pt-4">
+                                <form onSubmit={handleSendRequest} className="space-y-4 pt-4">
                                     <Card>
                                         <CardHeader>
                                             <CardTitle>{foundBusiness.name}</CardTitle>
@@ -346,10 +395,10 @@ export default function LoginPage() {
                                         <Label htmlFor="joinerEmail">Το Email σας</Label>
                                         <Input id="joinerEmail" name="joinerEmail" type="email" required defaultValue="g.papadakis@email.com" />
                                     </div>
-                                    <Button type="button" className="w-full" onClick={handleSendRequest}>
+                                    <Button type="submit" className="w-full">
                                         Αποστολή Αιτήματος Συμμετοχής
                                     </Button>
-                                </div>
+                                </form>
                             )}
                         </>
                     )}
@@ -410,3 +459,5 @@ export default function LoginPage() {
     </main>
   );
 }
+
+    
