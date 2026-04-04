@@ -29,16 +29,13 @@ declare global {
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/30';
     const ratio = current / ideal;
-    if (ratio > 5 / 6) {
+    if (ratio >= 0.8) {
       return 'bg-green-400/20 text-green-700 dark:text-green-400';
     }
-    if (ratio <= 1 / 3) {
-      return 'bg-destructive/20 text-destructive';
-    }
-    if (ratio <= 1 / 2) {
+    if (ratio >= 0.4) {
       return 'bg-yellow-400/20 text-yellow-700 dark:text-yellow-400';
     }
-    return 'bg-muted/30';
+    return 'bg-destructive/20 text-destructive';
 };
 
 const playBeep = () => {

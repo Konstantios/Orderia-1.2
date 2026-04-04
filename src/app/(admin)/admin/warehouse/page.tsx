@@ -34,16 +34,13 @@ import { collection, increment, writeBatch, query, where, doc } from 'firebase/f
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/50 border-transparent';
     const ratio = current / ideal;
-    if (ratio > 5 / 6) {
+    if (ratio >= 0.8) {
       return 'bg-green-400/10 border-green-400/50 text-green-400';
     }
-    if (ratio <= 1 / 3) {
-      return 'bg-destructive/20 border-destructive/50 text-destructive';
-    }
-    if (ratio <= 1 / 2) {
+    if (ratio >= 0.4) {
       return 'bg-yellow-400/10 border-yellow-400/50 text-yellow-400';
     }
-    return 'bg-muted/50 border-transparent';
+    return 'bg-destructive/20 border-destructive/50 text-destructive';
 };
 
 export default function AdminWarehousePage() {
