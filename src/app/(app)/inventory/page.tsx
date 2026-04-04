@@ -11,13 +11,13 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
 import { Separator } from '@/components/ui/separator';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryEntry } from './entry';
 import { InventoryExit } from './exit';
 import { useFirebase, useCollection, useFirestore, useMemoFirebase, setDocumentNonBlocking, type WithId } from '@/firebase';
-import { collection, query, where, doc, writeBatch, increment } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, increment, getDocs } from 'firebase/firestore';
 import type { Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -39,13 +39,44 @@ export default function InventoryPage() {
     const { toast } = useToast();
     const { user, isUserLoading, firestore } = useFirebase();
 
-    // 1. Fetch user's store
-    const storeQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
-    }, [firestore, user]);
-    const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
-    const store = stores?.[0];
+    const [store, setStore] = useState<WithId<Store> | null>(null);
+    const [isLoadingStores, setIsLoadingStores] = useState(true);
+
+    // 1. Fetch user's store robustly
+    useEffect(() => {
+        if (!firestore || !user) {
+            setIsLoadingStores(false);
+            return;
+        };
+
+        const findStore = async () => {
+            setIsLoadingStores(true);
+            const storesRef = collection(firestore, 'stores');
+            
+            const ownerQuery = query(storesRef, where("ownerId", "==", user.uid));
+            const managerQuery = query(storesRef, where("managerUids", "array-contains", user.uid));
+
+            const [ownerSnap, managerSnap] = await Promise.all([
+                getDocs(ownerQuery),
+                getDocs(managerQuery)
+            ]);
+
+            let foundStore: WithId<Store> | null = null;
+            if (!ownerSnap.empty) {
+                const storeDoc = ownerSnap.docs[0];
+                foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+            } else if (!managerSnap.empty) {
+                 const storeDoc = managerSnap.docs[0];
+                 foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+            }
+            
+            setStore(foundStore);
+            setIsLoadingStores(false);
+        }
+
+        findStore();
+
+    }, [user, firestore]);
 
     // 2. Fetch store's inventory
     const inventoryQuery = useMemoFirebase(() => {
