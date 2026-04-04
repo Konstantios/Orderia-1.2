@@ -515,6 +515,13 @@
           "type": "string",
           "description": "The estimated date for the delivery of this order.",
           "format": "date"
+        },
+        "memberUids": {
+            "type": "array",
+            "description": "A list of user UIDs who have access to this order (members of both store and wholesaler). Used for security rules.",
+            "items": {
+              "type": "string"
+            }
         }
       },
       "required": [

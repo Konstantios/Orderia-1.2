@@ -225,6 +225,11 @@ export default function NewOrderPage() {
         }
         const wholesalerDoc = wholesalerSnapshot.docs[0];
         const wholesaler = { id: wholesalerDoc.id, ...wholesalerDoc.data() } as Wholesaler;
+        
+        const storeMembers = store.managerUids || [store.ownerId];
+        const wholesalerMembers = wholesaler.adminUids || [wholesaler.ownerId];
+        const memberUids = Array.from(new Set([...storeMembers, ...wholesalerMembers]));
+
 
         // Construct the new order object with all necessary fields
         const newOrderData = {
@@ -235,11 +240,7 @@ export default function NewOrderPage() {
             status: 'Εκκρεμής',
             notes: notes || '',
             items: orderItems,
-            // Denormalized auth fields for security rules
-            storeOwnerId: store.ownerId,
-            storeManagerUids: store.managerUids || [store.ownerId],
-            wholesalerOwnerId: wholesaler.ownerId,
-            wholesalerAdminUids: wholesaler.adminUids,
+            memberUids: memberUids,
         };
         
         await addDoc(collection(firestore, "orders"), newOrderData);

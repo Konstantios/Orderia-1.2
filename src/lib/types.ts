@@ -86,6 +86,7 @@ export interface Order {
   supplierNotes?: string;
   wholesalerId?: string;
   storeId?: string;
+  memberUids?: string[];
 }
 
 export interface WholesalerStockItem {

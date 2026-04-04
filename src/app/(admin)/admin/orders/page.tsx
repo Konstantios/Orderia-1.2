@@ -31,7 +31,7 @@ export default function AdminOrdersPage() {
 
     const ordersQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return query(collection(firestore, 'orders'), where('wholesalerAdminUids', 'array-contains', user.uid), orderBy('date', 'desc'));
+        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), orderBy('date', 'desc'));
     }, [firestore, user]);
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 

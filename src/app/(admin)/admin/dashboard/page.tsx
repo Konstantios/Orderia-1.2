@@ -204,7 +204,7 @@ export default function AdminDashboardPage() {
   // 2. Fetch Orders for KPIs and Sales Analysis
   const ordersQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    return query(collection(firestore, 'orders'), where('wholesalerAdminUids', 'array-contains', user.uid));
+    return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid));
   }, [user, firestore]);
   const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 
