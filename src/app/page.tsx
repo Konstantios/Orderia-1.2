@@ -59,6 +59,7 @@ export default function LoginPage() {
     setIsLoggingIn(true);
 
     const onSuccess = async (user: User) => {
+        setIsLoggingIn(true); // Keep loading state
         if (!firestore) {
             setIsLoggingIn(false);
             return;
@@ -67,41 +68,49 @@ export default function LoginPage() {
         try {
             const wholesalersRef = collection(firestore, 'wholesalers');
             const storesRef = collection(firestore, 'stores');
-
-            // Parallel queries to check for membership in any business
-            const [
-                wholesalerAdminSnap,
-                storeManagerSnap,
-                wholesalerOwnerSnap,
-                storeOwnerSnap
-            ] = await Promise.all([
-                getDocs(query(wholesalersRef, where("adminUids", "array-contains", user.uid))),
-                getDocs(query(storesRef, where("managerUids", "array-contains", user.uid))),
-                getDocs(query(wholesalersRef, where("ownerId", "==", user.uid))),
-                getDocs(query(storesRef, where("ownerId", "==", user.uid)))
+    
+            const wholesalerQuery = query(wholesalersRef, 
+                where("adminUids", "array-contains", user.uid)
+            );
+            const wholesalerOwnerQuery = query(wholesalersRef, 
+                where("ownerId", "==", user.uid)
+            );
+            
+            const storeQuery = query(storesRef, 
+                where("managerUids", "array-contains", user.uid)
+            );
+            const storeOwnerQuery = query(storesRef, 
+                where("ownerId", "==", user.uid)
+            );
+    
+            const [wholesalerSnap, wholesalerOwnerSnap] = await Promise.all([
+                getDocs(wholesalerQuery),
+                getDocs(wholesalerOwnerQuery)
             ]);
-
-            if (!wholesalerAdminSnap.empty || !wholesalerOwnerSnap.empty) {
-                // User is part of a wholesaler team, redirect to wholesaler/admin dashboard
+    
+            if (!wholesalerSnap.empty || !wholesalerOwnerSnap.empty) {
                 router.push('/admin/dashboard');
-                return;
+                return; // No need to set isLoggingIn to false as we are navigating away
             }
-
-            if (!storeManagerSnap.empty || !storeOwnerSnap.empty) {
-                // User is part of a store team, redirect to store/app dashboard
+    
+            const [storeSnap, storeOwnerSnap] = await Promise.all([
+                getDocs(storeQuery),
+                getDocs(storeOwnerQuery)
+            ]);
+    
+            if (!storeSnap.empty || !storeOwnerSnap.empty) {
                 router.push('/dashboard');
                 return;
             }
-
-            // If user has an account but is not part of any team, their request might be pending.
+    
             toast({
                 variant: "destructive",
                 title: "Δεν βρέθηκε επιχείρηση",
                 description: "Ο λογαριασμός σας δεν είναι συνδεδεμένος με κάποια επιχείρηση. Το αίτημά σας μπορεί να εκκρεμεί."
             });
-            auth.signOut(); // Log them out so they don't get stuck
+            auth.signOut();
             setIsLoggingIn(false);
-
+    
         } catch (error) {
             console.error("Error during post-login check:", error);
             toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν ήταν δυνατή η επαλήθευση του ρόλου σας." });

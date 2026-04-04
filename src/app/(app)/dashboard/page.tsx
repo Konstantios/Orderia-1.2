@@ -3,9 +3,13 @@
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Icons } from '@/components/icons';
-import { Bell, History, Package, ShoppingCart, Users } from 'lucide-react';
+import { Bell, History, Package, ShoppingCart, Users, Loader2 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
+import { useFirebase } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useEffect } from 'react';
+
 
 const menuItems = [
   {
@@ -54,12 +58,44 @@ const menuItems = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, firestore, isUserLoading } = useFirebase();
+
+  useEffect(() => {
+    // WORKAROUND: This is a safety net to redirect a user who was incorrectly
+    // sent to the store dashboard. It checks if they are a wholesaler member.
+    if (user && firestore) {
+      const checkWholesaler = async () => {
+        const wholesalersRef = collection(firestore, 'wholesalers');
+        const qAdmin = query(wholesalersRef, where("adminUids", "array-contains", user.uid));
+        const qOwner = query(wholesalersRef, where("ownerId", "==", user.uid));
+        
+        const [adminSnap, ownerSnap] = await Promise.all([
+          getDocs(qAdmin),
+          getDocs(qOwner)
+        ]);
+
+        if (!adminSnap.empty || !ownerSnap.empty) {
+          router.replace('/admin/dashboard');
+        }
+      };
+      checkWholesaler();
+    }
+  }, [user, firestore, router]);
+
 
   const handleRoleChange = (role: string) => {
     if (role === 'supplier') {
-      router.push('/');
+      router.push('/admin/dashboard');
     }
   };
+
+  if (isUserLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">
