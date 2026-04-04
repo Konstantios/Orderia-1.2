@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { initiateAnonymousSignIn, initiateEmailSignUp, initiateEmailSignIn, useAuth } from '@/firebase';
+import { initiateEmailSignUp, initiateEmailSignIn, useAuth } from '@/firebase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,20 +44,26 @@ export default function LoginPage() {
   
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === 'admin@frozenfoods.gr' && password === 'fr1') {
-      initiateEmailSignIn(auth, email, password);
-      router.push('/admin/dashboard');
-    } else if (email === 'user@igevsi.gr' && password === 'g1') {
-      initiateEmailSignIn(auth, email, password);
-      router.push('/dashboard');
-    } else {
-      initiateAnonymousSignIn(auth);
-      toast({
-        variant: 'destructive',
-        title: 'Λάθος Στοιχεία Σύνδεσης',
-        description: 'Ο συνδυασμός email και κωδικού δεν είναι σωστός. Συνδέεστε ως ανώνυμος χρήστης.',
-      });
+    if (!email || !password) {
+        toast({
+            variant: 'destructive',
+            title: 'Ελλιπή Στοιχεία',
+            description: 'Παρακαλώ συμπληρώστε το email και τον κωδικό σας.',
+        });
+        return;
     }
+
+    const onSuccess = () => {
+        // This is a temporary solution for the demo to route to the correct dashboard.
+        // A better solution would involve custom claims or user roles.
+        if (email === 'admin@frozenfoods.gr') {
+            router.push('/admin/dashboard');
+        } else {
+            router.push('/dashboard');
+        }
+    };
+    
+    initiateEmailSignIn(auth, email, password, onSuccess);
   };
 
   const handleSearchBusiness = () => {
@@ -88,17 +94,28 @@ export default function LoginPage() {
   const handleRegisterBusiness = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const businessName = formData.get('businessName');
+    const businessName = formData.get('businessName') as string;
     const email = formData.get('adminEmail') as string;
     const password = formData.get('adminPassword') as string;
 
-    initiateEmailSignUp(auth, email, password);
+    if (password.length < 6) {
+        toast({
+            variant: 'destructive',
+            title: 'Αδύναμος Κωδικός',
+            description: 'Ο κωδικός πρόσβασης πρέπει να έχει τουλάχιστον 6 χαρακτήρες.',
+        });
+        return;
+    }
 
-    toast({
-        title: 'Η Επιχείρηση Καταχωρήθηκε!',
-        description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
-    });
-    setIsRequestDialogOpen(false);
+    const onSuccess = () => {
+        toast({
+            title: 'Η Επιχείρηση Καταχωρήθηκε!',
+            description: `Ο λογαριασμός για την επιχείρηση "${businessName}" δημιουργήθηκε. Μπορείτε πλέον να συνδεθείτε.`
+        });
+        setIsRequestDialogOpen(false);
+    }
+
+    initiateEmailSignUp(auth, email, password, onSuccess);
   };
 
 
