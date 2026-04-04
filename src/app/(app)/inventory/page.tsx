@@ -80,13 +80,13 @@ export default function InventoryPage() {
         const batch = writeBatch(firestore);
         for (const [productId, count] of Object.entries(scannedItems)) {
             const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-            const lastAction = { type: type, value: count };
+            const data = { productId, storeId: store.id, lastAction: { type: type, value: count } };
             if (type === 'counting') {
-                batch.set(docRef, { productId, currentStock: count, lastAction }, { merge: true });
+                batch.set(docRef, { ...data, currentStock: count }, { merge: true });
             } else if (type === 'in') {
-                batch.set(docRef, { productId, currentStock: increment(count), lastAction }, { merge: true });
+                batch.set(docRef, { ...data, currentStock: increment(count) }, { merge: true });
             } else if (type === 'out') {
-                batch.set(docRef, { productId, currentStock: increment(-count), lastAction }, { merge: true });
+                batch.set(docRef, { ...data, currentStock: increment(-count) }, { merge: true });
             }
         }
         await batch.commit();
@@ -110,7 +110,7 @@ export default function InventoryPage() {
         const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
 
         const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-        setDocumentNonBlocking(docRef, { productId: productId, currentStock: stockValue }, { merge: true });
+        setDocumentNonBlocking(docRef, { productId: productId, storeId: store.id, currentStock: stockValue }, { merge: true });
     };
 
     const getProductData = (productId: string) => {

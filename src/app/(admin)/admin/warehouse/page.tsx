@@ -106,14 +106,14 @@ export default function AdminWarehousePage() {
         for (const [productId, count] of Object.entries(scannedItems)) {
             const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
             
-            const lastAction = { type: type, value: count };
+            const data = { productId, wholesalerId, warehouseId, lastAction: { type: type, value: count } };
 
             if (type === 'counting') {
-                batch.set(docRef, { productId: productId, quantity: count, lastAction }, { merge: true });
+                batch.set(docRef, { ...data, quantity: count }, { merge: true });
             } else if (type === 'in') {
-                batch.set(docRef, { productId: productId, quantity: increment(count), lastAction }, { merge: true });
+                batch.set(docRef, { ...data, quantity: increment(count) }, { merge: true });
             } else if (type === 'out') {
-                 batch.set(docRef, { productId: productId, quantity: increment(-count), lastAction }, { merge: true });
+                 batch.set(docRef, { ...data, quantity: increment(-count) }, { merge: true });
             }
         }
         
@@ -151,7 +151,8 @@ export default function AdminWarehousePage() {
         if (!firestore || !wholesalerId) return;
 
         const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
-        setDocumentNonBlocking(docRef, { productId: productId, idealStock: stockValue }, { merge: true });
+        const data = { productId: productId, wholesalerId, warehouseId: warehouseId, idealStock: stockValue };
+        setDocumentNonBlocking(docRef, data, { merge: true });
     };
 
     const handleCurrentStockChange = (productId: string, value: string, warehouseId: string) => {
@@ -161,7 +162,8 @@ export default function AdminWarehousePage() {
         if (!firestore || !wholesalerId) return;
 
         const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
-        setDocumentNonBlocking(docRef, { productId: productId, quantity: stockValue }, { merge: true });
+        const data = { productId: productId, wholesalerId, warehouseId: warehouseId, quantity: stockValue };
+        setDocumentNonBlocking(docRef, data, { merge: true });
     };
 
     const getStockData = (productId: string) => {
