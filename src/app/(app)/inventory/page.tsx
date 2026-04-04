@@ -84,7 +84,13 @@ export default function InventoryPage() {
         const batch = writeBatch(firestore);
         for (const [productId, count] of Object.entries(scannedItems)) {
             const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-            const data = { productId, storeId: store.id, lastAction: { type: type, value: count } };
+            const data = {
+                productId,
+                storeId: store.id,
+                ownerId: store.ownerId,
+                managerUids: store.managerUids,
+                lastAction: { type: type, value: count }
+            };
             if (type === 'counting') {
                 batch.set(docRef, { ...data, currentStock: count }, { merge: true });
             } else if (type === 'in') {
@@ -114,7 +120,13 @@ export default function InventoryPage() {
         const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
 
         const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-        setDocumentNonBlocking(docRef, { productId: productId, storeId: store.id, currentStock: stockValue }, { merge: true });
+        setDocumentNonBlocking(docRef, { 
+            productId: productId, 
+            storeId: store.id, 
+            currentStock: stockValue,
+            ownerId: store.ownerId,
+            managerUids: store.managerUids
+        }, { merge: true });
     };
 
     const handleIdealStockChange = (productId: string, value: string) => {
@@ -124,7 +136,13 @@ export default function InventoryPage() {
         const idealStockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
 
         const docRef = doc(firestore, 'stores', store.id, 'productConfigurations', productId);
-        setDocumentNonBlocking(docRef, { productId: productId, storeId: store.id, idealStock: idealStockValue }, { merge: true });
+        setDocumentNonBlocking(docRef, { 
+            productId: productId, 
+            storeId: store.id, 
+            idealStock: idealStockValue,
+            ownerId: store.ownerId,
+            managerUids: store.managerUids
+        }, { merge: true });
     };
 
     const getProductData = (productId: string) => {
