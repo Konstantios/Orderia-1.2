@@ -34,8 +34,8 @@ service cloud.firestore {
      */
     function isWholesalerMember(docData) {
       return docData != null && isSignedIn() && (
-        (docData.ownerId != null && request.auth.uid == docData.ownerId) ||
-        (docData.adminUids is list && request.auth.uid in docData.adminUids)
+        (docData.get('ownerId', null) == request.auth.uid) ||
+        (request.auth.uid in docData.get('adminUids', []))
       );
     }
     
@@ -52,8 +52,8 @@ service cloud.firestore {
      */
     function isStoreMember(docData) {
       return docData != null && isSignedIn() && (
-        (docData.ownerId != null && request.auth.uid == docData.ownerId) ||
-        (docData.managerUids is list && request.auth.uid in docData.managerUids)
+        (docData.get('ownerId', null) == request.auth.uid) ||
+        (request.auth.uid in docData.get('managerUids', []))
       );
     }
 

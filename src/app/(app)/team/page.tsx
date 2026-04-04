@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { 
@@ -39,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking, WithId } from "@/firebase";
-import { collection, query, where, doc, writeBatch, arrayUnion } from "firebase/firestore";
+import { collection, query, where, doc, writeBatch, arrayUnion, getDocs } from "firebase/firestore";
 import type { Store } from "@/lib/types";
 
 type JoinRequest = {
@@ -56,13 +56,44 @@ export default function TeamPage() {
     
     const { user, firestore, isUserLoading } = useFirebase();
 
-    // 1. Fetch user's store
-    const storeQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        return query(collection(firestore, 'stores'), where("managerUids", "array-contains", user.uid));
-    }, [firestore, user]);
-    const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
-    const store = stores?.[0];
+    const [store, setStore] = useState<WithId<Store> | null>(null);
+    const [isLoadingStores, setIsLoadingStores] = useState(true);
+
+    // 1. Fetch user's store robustly
+    useEffect(() => {
+        if (!firestore || !user) {
+            setIsLoadingStores(false);
+            return;
+        };
+
+        const findStore = async () => {
+            setIsLoadingStores(true);
+            const storesRef = collection(firestore, 'stores');
+            
+            const ownerQuery = query(storesRef, where("ownerId", "==", user.uid));
+            const managerQuery = query(storesRef, where("managerUids", "array-contains", user.uid));
+
+            const [ownerSnap, managerSnap] = await Promise.all([
+                getDocs(ownerQuery),
+                getDocs(managerQuery)
+            ]);
+
+            let foundStore: WithId<Store> | null = null;
+            if (!ownerSnap.empty) {
+                const storeDoc = ownerSnap.docs[0];
+                foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+            } else if (!managerSnap.empty) {
+                 const storeDoc = managerSnap.docs[0];
+                 foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+            }
+            
+            setStore(foundStore);
+            setIsLoadingStores(false);
+        }
+
+        findStore();
+
+    }, [user, firestore]);
 
     // 2. Fetch pending join requests for this store
     const requestsQuery = useMemoFirebase(() => {
@@ -272,7 +303,7 @@ export default function TeamPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(isLoadingStores || isLoadingApproved) ? (
+                            {(isLoadingStores || isLoadingApproved || isUserLoading) ? (
                                 <TableRow>
                                     <TableCell colSpan={4} className="text-center">
                                         <Loader2 className="inline-block h-6 w-6 animate-spin" />
