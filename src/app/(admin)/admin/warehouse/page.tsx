@@ -99,14 +99,21 @@ export default function AdminWarehousePage() {
             return;
         }
 
-        if (!firestore || !wholesalerId) return;
+        if (!firestore || !wholesalerId || !wholesaler) return;
 
         const batch = writeBatch(firestore);
 
         for (const [productId, count] of Object.entries(scannedItems)) {
             const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
             
-            const data = { productId, wholesalerId, warehouseId, lastAction: { type: type, value: count } };
+            const data = { 
+                productId, 
+                wholesalerId, 
+                warehouseId, 
+                lastAction: { type: type, value: count },
+                ownerId: wholesaler.ownerId,
+                adminUids: wholesaler.adminUids,
+            };
 
             if (type === 'counting') {
                 batch.set(docRef, { ...data, quantity: count }, { merge: true });
@@ -132,12 +139,17 @@ export default function AdminWarehousePage() {
     };
     
     const handleAddWarehouse = () => {
-        if (!newWarehouseName.trim() || !firestore || !wholesalerId) {
+        if (!newWarehouseName.trim() || !firestore || !wholesalerId || !wholesaler) {
             toast({ variant: 'destructive', title: 'Το όνομα είναι υποχρεωτικό' });
             return;
         }
         const warehousesColRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses');
-        addDocumentNonBlocking(warehousesColRef, { name: newWarehouseName, wholesalerId });
+        addDocumentNonBlocking(warehousesColRef, { 
+            name: newWarehouseName, 
+            wholesalerId,
+            ownerId: wholesaler.ownerId,
+            adminUids: wholesaler.adminUids,
+        });
         
         setNewWarehouseName('');
         setIsAddDialogOpen(false);
@@ -148,10 +160,17 @@ export default function AdminWarehousePage() {
         const newIdealStock = parseInt(value, 10);
         const stockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
         
-        if (!firestore || !wholesalerId) return;
+        if (!firestore || !wholesalerId || !wholesaler) return;
 
         const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
-        const data = { productId: productId, wholesalerId, warehouseId: warehouseId, idealStock: stockValue };
+        const data = { 
+            productId: productId, 
+            wholesalerId, 
+            warehouseId: warehouseId, 
+            idealStock: stockValue,
+            ownerId: wholesaler.ownerId,
+            adminUids: wholesaler.adminUids,
+        };
         setDocumentNonBlocking(docRef, data, { merge: true });
     };
 
@@ -159,10 +178,17 @@ export default function AdminWarehousePage() {
         const newStock = parseInt(value, 10);
         const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
         
-        if (!firestore || !wholesalerId) return;
+        if (!firestore || !wholesalerId || !wholesaler) return;
 
         const docRef = doc(firestore, 'wholesalers', wholesalerId, 'warehouses', warehouseId, 'inventories', productId);
-        const data = { productId: productId, wholesalerId, warehouseId: warehouseId, quantity: stockValue };
+        const data = { 
+            productId: productId, 
+            wholesalerId, 
+            warehouseId: warehouseId, 
+            quantity: stockValue,
+            ownerId: wholesaler.ownerId,
+            adminUids: wholesaler.adminUids,
+        };
         setDocumentNonBlocking(docRef, data, { merge: true });
     };
 
@@ -291,7 +317,7 @@ export default function AdminWarehousePage() {
                                                                     <p className="text-sm text-muted-foreground">{product.code}</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                                                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
                                                                 <div className={cn('rounded-lg border p-2 flex flex-col justify-center items-center', getStockColor(currentStock, idealStock))}>
                                                                     <p className="text-xs font-semibold uppercase mb-1">ΑΠΟΘΕΜΑ</p>
                                                                     <div className="flex items-center justify-center gap-1">
@@ -301,7 +327,7 @@ export default function AdminWarehousePage() {
                                                                             defaultValue={currentStock}
                                                                             onBlur={(e) => handleCurrentStockChange(product.id, e.target.value, warehouse.id)}
                                                                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                            className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                            className="w-14 sm:w-16 h-auto p-0 text-xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                             min="0"
                                                                         />
                                                                         <div className="flex flex-col gap-1">
@@ -323,7 +349,7 @@ export default function AdminWarehousePage() {
                                                                             defaultValue={idealStock}
                                                                             onBlur={(e) => handleIdealStockChange(product.id, e.target.value, warehouse.id)}
                                                                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                            className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                            className="w-14 sm:w-16 h-auto p-0 text-xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                             min="0"
                                                                         />
                                                                         <div className="flex flex-col gap-1">
@@ -336,7 +362,7 @@ export default function AdminWarehousePage() {
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                                <div className="rounded-lg bg-muted/30 p-2">
+                                                                <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
                                                                     <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
                                                                     <p className="text-2xl font-bold text-accent">+{suggestion}</p>
                                                                 </div>

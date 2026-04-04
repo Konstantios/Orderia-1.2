@@ -165,7 +165,13 @@ export default function LoginPage() {
               
               // Create warehouse
               const warehousesRef = collection(firestore, 'wholesalers', wholesalerId, 'warehouses');
-              const warehouseDocRef = await addDocumentNonBlocking(warehousesRef, { name: 'Αποθήκη 1', wholesalerId });
+              const warehouseData = {
+                name: 'Αποθήκη 1',
+                wholesalerId,
+                ownerId: user.uid,
+                adminUids: [user.uid],
+              };
+              const warehouseDocRef = await addDocumentNonBlocking(warehousesRef, warehouseData);
 
               if(warehouseDocRef) {
                 const warehouseId = warehouseDocRef.id;
@@ -182,6 +188,8 @@ export default function LoginPage() {
                         warehouseId: warehouseId,
                         quantity: stockItem.quantity,
                         idealStock: stockItem.idealStock,
+                        ownerId: user.uid,
+                        adminUids: [user.uid],
                         lastAction: { type: 'counting', value: stockItem.quantity },
                     };
                     batch.set(productDocRef, initialData);

@@ -155,8 +155,9 @@ service cloud.firestore {
        */
       match /warehouses/{warehouseId} {
         allow list, get: if canAccessWholesalerSubcollection(wholesalerId);
-        allow create: if canAccessWholesalerSubcollection(wholesalerId) && request.resource.data.wholesalerId == wholesalerId;
-        allow update, delete: if canAccessWholesalerSubcollection(wholesalerId);
+        allow create: if isSignedIn() && request.resource.data.wholesalerId == wholesalerId && request.resource.data.ownerId == request.auth.uid;
+        allow update: if isWholesalerMember(resource.data);
+        allow delete: if isWholesalerMember(resource.data);
 
         /**
          * @description Inventory records for products within a specific warehouse.
@@ -165,9 +166,9 @@ service cloud.firestore {
          */
         match /inventories/{inventoryId} {
             allow get, list: if canAccessWholesalerSubcollection(wholesalerId);
-            allow create: if canAccessWholesalerSubcollection(wholesalerId) && request.resource.data.wholesalerId == wholesalerId && request.resource.data.warehouseId == warehouseId;
-            allow update: if canAccessWholesalerSubcollection(wholesalerId) && request.resource.data.wholesalerId == resource.data.wholesalerId && request.resource.data.warehouseId == resource.data.warehouseId;
-            allow delete: if canAccessWholesalerSubcollection(wholesalerId);
+            allow create: if isSignedIn() && request.resource.data.wholesalerId == wholesalerId && request.resource.data.warehouseId == warehouseId && request.resource.data.ownerId == request.auth.uid;
+            allow update: if isWholesalerMember(resource.data) && request.resource.data.wholesalerId == resource.data.wholesalerId && request.resource.data.warehouseId == resource.data.warehouseId;
+            allow delete: if isWholesalerMember(resource.data);
         }
       }
     }

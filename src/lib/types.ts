@@ -79,6 +79,10 @@ export interface WholesalerStockItem {
   productId: string;
   quantity: number;
   idealStock: number;
+  wholesalerId: string;
+  warehouseId: string;
+  ownerId: string;
+  adminUids: string[];
   lastAction?: {
     type: 'in' | 'out' | 'counting';
     value: number;
@@ -89,6 +93,8 @@ export interface Warehouse {
   id: string;
   name: string;
   wholesalerId: string;
+  ownerId: string;
+  adminUids: string[];
 }
 
 

@@ -87,11 +87,24 @@
         "wholesalerId": {
           "type": "string",
           "description": "The ID of the wholesaler this warehouse belongs to."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Denormalized UID of the wholesaler's owner."
+        },
+        "adminUids": {
+          "type": "array",
+          "description": "Denormalized list of UIDs with admin access.",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
         "name",
-        "wholesalerId"
+        "wholesalerId",
+        "ownerId",
+        "adminUids"
       ]
     },
     "Store": {
@@ -380,6 +393,17 @@
           "type": "string",
           "description": "The date and time when this inventory record was last updated.",
           "format": "date-time"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Denormalized UID of the wholesaler's owner."
+        },
+        "adminUids": {
+          "type": "array",
+          "description": "Denormalized list of UIDs with admin access.",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -388,7 +412,9 @@
         "productId",
         "currentStock",
         "idealStock",
-        "lastUpdated"
+        "lastUpdated",
+        "ownerId",
+        "adminUids"
       ]
     },
     "Order": {
