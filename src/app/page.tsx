@@ -65,23 +65,43 @@ export default function LoginPage() {
         }
         
         try {
-            // Check if user is part of a wholesaler
             const wholesalersRef = collection(firestore, 'wholesalers');
-            const qWholesalerOwner = query(wholesalersRef, where("ownerId", "==", user.uid));
-            const qWholesalerAdmin = query(wholesalersRef, where("adminUids", "array-contains", user.uid));
+            const storesRef = collection(firestore, 'stores');
 
-            const [ownerSnap, adminSnap] = await Promise.all([
-                getDocs(qWholesalerOwner),
-                getDocs(qWholesalerAdmin)
+            // Parallel queries to check for membership in any business
+            const [
+                wholesalerAdminSnap,
+                storeManagerSnap,
+                wholesalerOwnerSnap,
+                storeOwnerSnap
+            ] = await Promise.all([
+                getDocs(query(wholesalersRef, where("adminUids", "array-contains", user.uid))),
+                getDocs(query(storesRef, where("managerUids", "array-contains", user.uid))),
+                getDocs(query(wholesalersRef, where("ownerId", "==", user.uid))),
+                getDocs(query(storesRef, where("ownerId", "==", user.uid)))
             ]);
 
-            if (!ownerSnap.empty || !adminSnap.empty) {
+            if (!wholesalerAdminSnap.empty || !wholesalerOwnerSnap.empty) {
+                // User is part of a wholesaler team, redirect to wholesaler/admin dashboard
                 router.push('/admin/dashboard');
                 return;
             }
 
-            // If not a wholesaler, assume they are a store user and redirect to the main dashboard
-            router.push('/dashboard');
+            if (!storeManagerSnap.empty || !storeOwnerSnap.empty) {
+                // User is part of a store team, redirect to store/app dashboard
+                router.push('/dashboard');
+                return;
+            }
+
+            // If user has an account but is not part of any team, their request might be pending.
+            toast({
+                variant: "destructive",
+                title: "Δεν βρέθηκε επιχείρηση",
+                description: "Ο λογαριασμός σας δεν είναι συνδεδεμένος με κάποια επιχείρηση. Το αίτημά σας μπορεί να εκκρεμεί."
+            });
+            auth.signOut(); // Log them out so they don't get stuck
+            setIsLoggingIn(false);
+
         } catch (error) {
             console.error("Error during post-login check:", error);
             toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν ήταν δυνατή η επαλήθευση του ρόλου σας." });
