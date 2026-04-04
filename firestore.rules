@@ -33,7 +33,10 @@ service cloud.firestore {
      * @param docData The document data map which must contain `ownerId` and `adminUids`.
      */
     function isWholesalerMember(docData) {
-      return isSignedIn() && (request.auth.uid == docData.ownerId || request.auth.uid in docData.adminUids);
+      return isSignedIn() && (
+        request.auth.uid == docData.ownerId ||
+        (docData.keys().hasAll(['adminUids']) && request.auth.uid in docData.adminUids)
+      );
     }
     
     /**
@@ -48,7 +51,10 @@ service cloud.firestore {
      * @param docData The document data map which must contain `ownerId` and `managerUids`.
      */
     function isStoreMember(docData) {
-      return isSignedIn() && (request.auth.uid == docData.ownerId || request.auth.uid in docData.managerUids);
+      return isSignedIn() && (
+        request.auth.uid == docData.ownerId ||
+        (docData.keys().hasAll(['managerUids']) && request.auth.uid in docData.managerUids)
+      );
     }
 
     /**
@@ -130,9 +136,7 @@ service cloud.firestore {
         allow update, delete: if isWholesalerMember(resource.data);
 
         match /inventories/{inventoryId} {
-          allow read: if canAccessWholesalerSubcollection(wholesalerId);
-          allow create, update: if canAccessWholesalerSubcollection(wholesalerId);
-          allow delete: if canAccessWholesalerSubcollection(wholesalerId);
+          allow read, write: if canAccessWholesalerSubcollection(wholesalerId);
         }
       }
       
