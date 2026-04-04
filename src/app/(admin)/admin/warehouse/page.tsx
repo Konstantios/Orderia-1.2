@@ -14,6 +14,11 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import type { WholesalerStockItem } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+
 
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/50 border-transparent';
@@ -106,9 +111,54 @@ export default function AdminWarehousePage() {
         return { product, currentStock, idealStock, suggestion, lastAction };
     };
 
+    const handleExport = () => {
+        const dataToExport = allProducts.map(product => {
+            const { currentStock, idealStock, suggestion } = getStockData(product.id);
+            return {
+                'Κωδικός Προϊόντος': product.code,
+                'Όνομα': product.name,
+                'Απόθεμα': currentStock,
+                'Ιδανικό': idealStock,
+                'Προτεινόμενο': suggestion
+            };
+        });
+    
+        if (dataToExport.length === 0) {
+            toast({
+                title: "Δεν υπάρχουν δεδομένα",
+                description: "Δεν υπάρχουν προϊόντα στην αποθήκη για εξαγωγή.",
+                variant: "destructive"
+            });
+            return;
+        }
+    
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Απόθεμα");
+    
+        // Auto-fit columns
+        const colWidths = Object.keys(dataToExport[0] || {}).map(key => ({
+            wch: Math.max(
+                key.length,
+                ...dataToExport.map(row => (String((row as any)[key]) || '').length)
+            ) + 2
+        }));
+        worksheet['!cols'] = colWidths;
+        
+        const today = format(new Date(), 'dd-MM-yyyy');
+        const fileName = `αποθήκη 1 - ${today}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+    };
+
     return (
         <div className="space-y-6">
-            <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
+                 <Button onClick={handleExport} variant="outline">
+                    <Download className="mr-2 h-4 w-4" />
+                    Εξαγωγή σε Excel
+                </Button>
+            </div>
             <Tabs defaultValue="stock" className="w-full">
                 <div className="flex justify-center">
                     <TabsList className="flex-wrap h-auto">
