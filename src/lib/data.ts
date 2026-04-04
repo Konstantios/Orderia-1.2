@@ -104,11 +104,11 @@ export const adminCustomers: AdminCustomer[] = [
 
 // Updated inventory to match the screenshot
 export const customerInventory: CustomerInventoryItem[] = [
-  { productId: 'p1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Pizza
-  { productId: 'p2', currentStock: 12, lastAction: { type: 'in', value: 10 } },  // Croissant
-  { productId: 'p3', currentStock: 38, lastAction: { type: 'out', value: 2 } },  // Bougatsa
-  { productId: 'p4', currentStock: 18 },  // Kourou
-  { productId: 'p5', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Spanakopita, keep for other pages
+  { productId: 'p1', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Pizza
+  { productId: 'p2', storeId: 'store-1', currentStock: 12, lastAction: { type: 'in', value: 10 } },  // Croissant
+  { productId: 'p3', storeId: 'store-1', currentStock: 38, lastAction: { type: 'out', value: 2 } },  // Bougatsa
+  { productId: 'p4', storeId: 'store-1', currentStock: 18 },  // Kourou
+  { productId: 'p5', storeId: 'store-1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Spanakopita, keep for other pages
 ];
 
 export const orderHistory: Order[] = [
@@ -199,7 +199,6 @@ export const wholesalerStock: WholesalerStockItem[] = [
     { productId: 'p3', quantity: 30, idealStock: 100 },  // Red
     { productId: 'p4', quantity: 120, idealStock: 100 }, // Green
     { productId: 'p5', quantity: 40, idealStock: 150 },  // Red
-    { productId: 'p6', quantity: 100, idealStock: 200 }, // Yellow
 ];
 
 export const adminDashboardData: AdminDashboardData = {

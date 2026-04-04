@@ -43,7 +43,6 @@ export interface Store {
 }
 
 export interface CustomerInventoryItem {
-  id: string;
   productId: string;
   storeId: string;
   currentStock: number;
@@ -54,7 +53,6 @@ export interface CustomerInventoryItem {
 }
 
 export interface StoreProductConfiguration {
-  id: string;
   storeId: string;
   productId: string;
   idealStock: number;
@@ -78,7 +76,6 @@ export interface Order {
 }
 
 export interface WholesalerStockItem {
-  id: string;
   productId: string;
   quantity: number;
   idealStock: number;
