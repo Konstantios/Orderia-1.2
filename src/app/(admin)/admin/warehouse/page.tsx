@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { products as allProducts, wholesalerStock as initialWholesalerStock } from '@/lib/data';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { AdminWarehouseCounting } from './counting';
 import { AdminWarehouseDatabase } from './database';
@@ -58,6 +58,35 @@ export default function AdminWarehousePage() {
     const [newWarehouseName, setNewWarehouseName] = useState('');
     
     const { toast } = useToast();
+
+    useEffect(() => {
+        try {
+            const savedWarehouses = localStorage.getItem('admin_warehouses');
+            if (savedWarehouses) {
+                const parsedWarehouses = JSON.parse(savedWarehouses);
+                if (Array.isArray(parsedWarehouses) && parsedWarehouses.length > 0) {
+                    setWarehouses(parsedWarehouses);
+                    
+                    const savedActiveTab = localStorage.getItem('admin_warehouses_active_tab');
+                    if (savedActiveTab && parsedWarehouses.some((w: any) => w.id === savedActiveTab)) {
+                        setActiveTab(savedActiveTab);
+                    } else {
+                        setActiveTab(parsedWarehouses[0].id);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load warehouses from localStorage", e);
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('admin_warehouses', JSON.stringify(warehouses));
+        if (warehouses.some(w => w.id === activeTab)) {
+            localStorage.setItem('admin_warehouses_active_tab', activeTab);
+        }
+    }, [warehouses, activeTab]);
+
 
     const handleSync = (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out', warehouseId: string) => {
         if (Object.keys(scannedItems).length === 0) {
@@ -193,7 +222,7 @@ export default function AdminWarehousePage() {
         worksheet['!cols'] = colWidths;
         
         const today = format(new Date(), 'dd-MM-yyyy');
-        const fileName = `${warehouse.name} - ${today}.xlsx`;
+        const fileName = `${warehouse.name.replace(/ /g, '_')}-${today}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
 
