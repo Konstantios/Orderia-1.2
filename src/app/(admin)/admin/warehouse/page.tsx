@@ -15,9 +15,17 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import type { WholesalerStockItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
+import { Download, PlusCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 
 const getStockColor = (current: number, ideal: number) => {
@@ -35,11 +43,23 @@ const getStockColor = (current: number, ideal: number) => {
     return 'bg-muted/50 border-transparent';
 };
 
+type Warehouse = {
+    id: string;
+    name: string;
+    stock: WholesalerStockItem[];
+}
+
 export default function AdminWarehousePage() {
-    const [stock, setStock] = useState<WholesalerStockItem[]>(initialWholesalerStock);
+    const [warehouses, setWarehouses] = useState<Warehouse[]>([
+        { id: 'wh1', name: 'Αποθήκη 1', stock: initialWholesalerStock }
+    ]);
+    const [activeTab, setActiveTab] = useState<string>('wh1');
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [newWarehouseName, setNewWarehouseName] = useState('');
+    
     const { toast } = useToast();
 
-    const handleSync = (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out') => {
+    const handleSync = (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out', warehouseId: string) => {
         if (Object.keys(scannedItems).length === 0) {
             toast({
                 variant: 'destructive',
@@ -49,8 +69,10 @@ export default function AdminWarehousePage() {
             return;
         }
 
-        setStock(prevStock => {
-            const stockMap = new Map(prevStock.map(item => [item.productId, item]));
+        setWarehouses(prevWarehouses => prevWarehouses.map(wh => {
+            if (wh.id !== warehouseId) return wh;
+
+            const stockMap = new Map(wh.stock.map(item => [item.productId, item]));
 
             for (const [productId, count] of Object.entries(scannedItems)) {
                 const existingItem = stockMap.get(productId) || { productId, quantity: 0, idealStock: 0 };
@@ -75,8 +97,8 @@ export default function AdminWarehousePage() {
                 });
             }
             
-            return Array.from(stockMap.values());
-        });
+            return { ...wh, stock: Array.from(stockMap.values()) };
+        }));
 
         const title = {
             'counting': 'Συγχρονισμός Ολοκληρώθηκε!',
@@ -86,24 +108,49 @@ export default function AdminWarehousePage() {
         
         toast({
             title: title,
-            description: 'Το απόθεμα αποθήκης ενημερώθηκε.',
+            description: `Το απόθεμα για την αποθήκη "${warehouses.find(w => w.id === warehouseId)?.name}" ενημερώθηκε.`,
         });
     };
+    
+    const handleAddWarehouse = () => {
+        if (!newWarehouseName.trim()) {
+            toast({ variant: 'destructive', title: 'Το όνομα είναι υποχρεωτικό' });
+            return;
+        }
+        const newWarehouseId = `wh${Date.now()}`;
+        setWarehouses(prev => [
+            ...prev,
+            { id: newWarehouseId, name: newWarehouseName, stock: [] }
+        ]);
+        setActiveTab(newWarehouseId);
+        setNewWarehouseName('');
+        setIsAddDialogOpen(false);
+        toast({ title: `Η αποθήκη "${newWarehouseName}" δημιουργήθηκε` });
+    }
 
-    const handleIdealStockChange = (productId: string, value: string) => {
+    const handleIdealStockChange = (productId: string, value: string, warehouseId: string) => {
         const newIdealStock = parseInt(value, 10);
         const stockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
         
-        setStock(prevStock => {
-            return prevStock.map(item => 
+         setWarehouses(prevWarehouses => prevWarehouses.map(wh => {
+            if (wh.id !== warehouseId) return wh;
+            
+            const newStock = wh.stock.map(item => 
                 item.productId === productId ? { ...item, idealStock: stockValue } : item
             );
-        });
+            return { ...wh, stock: newStock };
+        }));
     };
 
-    const getStockData = (productId: string) => {
+    const getStockData = (productId: string, warehouseId: string) => {
+        const warehouse = warehouses.find(wh => wh.id === warehouseId);
         const product = allProducts.find(p => p.id === productId)!;
-        const stockItem = stock.find(i => i.productId === productId);
+        
+        if (!warehouse) {
+            return { product, currentStock: 0, idealStock: 0, suggestion: 0, lastAction: undefined };
+        }
+        
+        const stockItem = warehouse.stock.find(i => i.productId === productId);
         const currentStock = stockItem?.quantity || 0;
         const idealStock = stockItem?.idealStock || 0;
         const suggestion = Math.max(0, idealStock - currentStock);
@@ -111,9 +158,9 @@ export default function AdminWarehousePage() {
         return { product, currentStock, idealStock, suggestion, lastAction };
     };
 
-    const handleExport = () => {
+    const handleExport = (warehouse: Warehouse) => {
         const dataToExport = allProducts.map(product => {
-            const { currentStock, idealStock, suggestion } = getStockData(product.id);
+            const { currentStock, idealStock, suggestion } = getStockData(product.id, warehouse.id);
             return {
                 'Κωδικός Προϊόντος': product.code,
                 'Όνομα': product.name,
@@ -126,7 +173,7 @@ export default function AdminWarehousePage() {
         if (dataToExport.length === 0) {
             toast({
                 title: "Δεν υπάρχουν δεδομένα",
-                description: "Δεν υπάρχουν προϊόντα στην αποθήκη για εξαγωγή.",
+                description: `Δεν υπάρχουν προϊόντα στην ${warehouse.name} για εξαγωγή.`,
                 variant: "destructive"
             });
             return;
@@ -134,7 +181,7 @@ export default function AdminWarehousePage() {
     
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Απόθεμα");
+        XLSX.utils.book_append_sheet(workbook, worksheet, warehouse.name);
     
         // Auto-fit columns
         const colWidths = Object.keys(dataToExport[0] || {}).map(key => ({
@@ -146,105 +193,145 @@ export default function AdminWarehousePage() {
         worksheet['!cols'] = colWidths;
         
         const today = format(new Date(), 'dd-MM-yyyy');
-        const fileName = `αποθήκη 1 - ${today}.xlsx`;
+        const fileName = `${warehouse.name} - ${today}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
-                 <Button onClick={handleExport} variant="outline">
-                    <Download className="mr-2 h-4 w-4" />
-                    Εξαγωγή σε Excel
+                <h1 className="font-headline text-3xl font-bold">Διαχείριση Αποθηκών</h1>
+                 <Button onClick={() => setIsAddDialogOpen(true)} variant="outline">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Προσθήκη Αποθήκης
                 </Button>
             </div>
-            <Tabs defaultValue="stock" className="w-full">
-                <div className="flex justify-center">
-                    <TabsList className="flex-wrap h-auto">
-                        <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
-                        <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
-                        <TabsTrigger value="in">Είσοδος</TabsTrigger>
-                        <TabsTrigger value="out">Έξοδος</TabsTrigger>
-                        <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
-                    </TabsList>
-                </div>
-                <TabsContent value="stock" className="mt-6">
-                    <div className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Απόθεμα Αποθήκης</CardTitle>
-                                <CardDescription>Επισκόπηση του αποθέματος για όλα τα προϊόντα.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {allProducts.map(product => {
-                                    const { currentStock, idealStock, suggestion, lastAction } = getStockData(product.id);
-                                     const lastActionInfo = lastAction ? {
-                                        'είσοδος': { text: 'Είσοδος', color: 'text-green-500' },
-                                        'έξοδος': { text: 'Έξοδος', color: 'text-destructive' },
-                                        'καταμέτρηση': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
-                                    }[lastAction.type] : null;
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap lg:h-auto lg:justify-start">
+                    {warehouses.map(wh => (
+                        <TabsTrigger key={wh.id} value={wh.id}>{wh.name}</TabsTrigger>
+                    ))}
+                    <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
+                </TabsList>
+                
+                {warehouses.map(warehouse => (
+                    <TabsContent key={warehouse.id} value={warehouse.id} className="mt-6">
+                        <Tabs defaultValue="stock" className="w-full">
+                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+                                <TabsList className="flex-wrap h-auto">
+                                    <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
+                                    <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
+                                    <TabsTrigger value="in">Είσοδος</TabsTrigger>
+                                    <TabsTrigger value="out">Έξοδος</TabsTrigger>
+                                </TabsList>
+                                <Button onClick={() => handleExport(warehouse)} variant="outline">
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Εξαγωγή {warehouse.name}
+                                </Button>
+                            </div>
+                            <TabsContent value="stock">
+                                <div className="space-y-4">
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>Απόθεμα - {warehouse.name}</CardTitle>
+                                            <CardDescription>Επισκόπηση του αποθέματος για όλα τα προϊόντα σε αυτή την αποθήκη.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {allProducts.map(product => {
+                                                const { currentStock, idealStock, suggestion, lastAction } = getStockData(product.id, warehouse.id);
+                                                const lastActionInfo = lastAction ? {
+                                                    'είσοδος': { text: 'Είσοδος', color: 'text-green-500' },
+                                                    'έξοδος': { text: 'Έξοδος', color: 'text-destructive' },
+                                                    'καταμέτρηση': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
+                                                }[lastAction.type] : null;
 
-                                    return (
-                                        <Card key={product.id} className="overflow-hidden bg-card">
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-4">
-                                                    <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg object-cover" data-ai-hint={product.imageHint} />
-                                                    <div className="flex-1">
-                                                        <p className="font-semibold">{product.name}</p>
-                                                        <p className="text-sm text-muted-foreground">{product.code}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                                    <div className={cn('rounded-lg border p-2', getStockColor(currentStock, idealStock))}>
-                                                        <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
-                                                        <p className="text-2xl font-bold">{currentStock}</p>
-                                                    </div>
-                                                    <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
-                                                        <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
-                                                        <Input
-                                                            type="number"
-                                                            value={idealStock}
-                                                            onChange={(e) => handleIdealStockChange(product.id, e.target.value)}
-                                                            className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                            min="0"
-                                                        />
-                                                    </div>
-                                                    <div className="rounded-lg bg-muted/30 p-2">
-                                                        <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
-                                                        <p className="text-2xl font-bold text-accent">+{suggestion}</p>
-                                                    </div>
-                                                </div>
-                                                {lastAction && lastActionInfo && (
-                                                    <>
-                                                        <Separator className="my-3" />
-                                                        <div className={cn("flex items-center justify-center gap-2 text-xs font-medium", lastActionInfo.color)}>
-                                                            <span>Προηγ. ενέργεια:</span>
-                                                            <span className="font-bold">{lastActionInfo.text} {lastAction.value}</span>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </CardContent>
-                                        </Card>
-                                    );
-                                })}
-                            </CardContent>
-                        </Card>
+                                                return (
+                                                    <Card key={product.id} className="overflow-hidden bg-card">
+                                                        <CardContent className="p-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg object-cover" data-ai-hint={product.imageHint} />
+                                                                <div className="flex-1">
+                                                                    <p className="font-semibold">{product.name}</p>
+                                                                    <p className="text-sm text-muted-foreground">{product.code}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                                                                <div className={cn('rounded-lg border p-2', getStockColor(currentStock, idealStock))}>
+                                                                    <p className="text-xs font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
+                                                                    <p className="text-2xl font-bold">{currentStock}</p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center">
+                                                                    <p className="text-xs font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={idealStock}
+                                                                        onChange={(e) => handleIdealStockChange(product.id, e.target.value, warehouse.id)}
+                                                                        className="w-full h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                                        min="0"
+                                                                    />
+                                                                </div>
+                                                                <div className="rounded-lg bg-muted/30 p-2">
+                                                                    <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
+                                                                    <p className="text-2xl font-bold text-accent">+{suggestion}</p>
+                                                                </div>
+                                                            </div>
+                                                            {lastAction && lastActionInfo && (
+                                                                <>
+                                                                    <Separator className="my-3" />
+                                                                    <div className={cn("flex items-center justify-center gap-2 text-xs font-medium", lastActionInfo.color)}>
+                                                                        <span>Προηγ. ενέργεια:</span>
+                                                                        <span className="font-bold">{lastActionInfo.text} {lastAction.value}</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </TabsContent>
+                             <TabsContent value="counting">
+                                <AdminWarehouseCounting products={allProducts} stock={warehouse.stock} onSync={(items) => handleSync(items, 'counting', warehouse.id)} />
+                            </TabsContent>
+                            <TabsContent value="in">
+                                <AdminWarehouseEntry products={allProducts} stock={warehouse.stock} onSync={(items) => handleSync(items, 'in', warehouse.id)} />
+                            </TabsContent>
+                            <TabsContent value="out">
+                                <AdminWarehouseExit products={allProducts} stock={warehouse.stock} onSync={(items) => handleSync(items, 'out', warehouse.id)} />
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </TabsContent>
-                <TabsContent value="counting" className="mt-6">
-                    <AdminWarehouseCounting products={allProducts} stock={stock} onSync={(items) => handleSync(items, 'counting')} />
-                </TabsContent>
-                <TabsContent value="in" className="mt-6">
-                    <AdminWarehouseEntry products={allProducts} stock={stock} onSync={(items) => handleSync(items, 'in')} />
-                </TabsContent>
-                 <TabsContent value="out" className="mt-6">
-                    <AdminWarehouseExit products={allProducts} stock={stock} onSync={(items) => handleSync(items, 'out')} />
-                </TabsContent>
-                <TabsContent value="database" className="mt-6">
-                    <AdminWarehouseDatabase products={allProducts} />
-                </TabsContent>
-            </Tabs>
-        </div>
+            ))}
+
+            <TabsContent value="database" className="mt-6">
+                <AdminWarehouseDatabase products={allProducts} />
+            </TabsContent>
+        </Tabs>
+        
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Προσθήκη Νέας Αποθήκης</DialogTitle>
+                    <DialogDescription>Δώστε ένα όνομα για τη νέα σας αποθήκη.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Input
+                        id="warehouseName"
+                        placeholder="π.χ. Αποθήκη Κέντρου"
+                        value={newWarehouseName}
+                        onChange={(e) => setNewWarehouseName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWarehouse()}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Ακύρωση</Button>
+                    <Button onClick={handleAddWarehouse}>Αποθήκευση</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      </div>
     );
 }
