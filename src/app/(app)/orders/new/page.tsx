@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { products as allProducts, customerInventory, customers, orderHistory } from '@/lib/data';
-import type { OrderItem } from '@/lib/types';
+import { products as allProducts, customers, orderHistory } from '@/lib/data';
+import type { OrderItem, Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 
 const customer = customers[0];
 const customerProducts = allProducts.filter(p => customer.products.some(cp => cp.productId === p.id));
@@ -22,7 +24,7 @@ const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo
 export default function NewOrderPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isCalculatingSuggestions, setIsCalculatingSuggestions] = useState(false);
   const [isSuggestionModeActive, setIsSuggestionModeActive] = useState(false);
   const [preSuggestionOrderItems, setPreSuggestionOrderItems] = useState<OrderItem[]>([]);
   
@@ -30,6 +32,29 @@ export default function NewOrderPage() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const { user, firestore } = useFirebase();
+
+  // Data fetching from Firestore
+  const storeQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
+  }, [firestore, user]);
+  const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
+  const store = stores?.[0];
+
+  const inventoryQuery = useMemoFirebase(() => {
+      if (!firestore || !store) return null;
+      return collection(firestore, 'stores', store.id, 'inventories');
+  }, [firestore, store]);
+  const { data: inventory, isLoading: isLoadingInventory } = useCollection<CustomerInventoryItem>(inventoryQuery);
+
+  const productConfigQuery = useMemoFirebase(() => {
+      if (!firestore || !store) return null;
+      return collection(firestore, 'stores', store.id, 'productConfigurations');
+  }, [firestore, store]);
+  const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
+
 
   const didMountNotes = useRef(false);
   const didMountOrderItems = useRef(false);
@@ -111,6 +136,8 @@ export default function NewOrderPage() {
     return orderItems.find(item => item.productId === productId)?.quantity || 0;
   };
   
+  const isDataLoading = isLoadingStores || isLoadingInventory || isLoadingProductConfigs;
+
   const toggleSuggestionMode = useCallback(() => {
     if (isSuggestionModeActive) {
       // Deactivating suggestions
@@ -122,18 +149,25 @@ export default function NewOrderPage() {
       });
     } else {
       // Activating suggestions
-      setIsLoading(true);
+      if (isDataLoading) {
+          toast({ title: 'Παρακαλώ περιμένετε', description: 'Φόρτωση δεδομένων αποθέματος...' });
+          return;
+      }
+      setIsCalculatingSuggestions(true);
       setTimeout(() => {
         try {
           setPreSuggestionOrderItems([...orderItems]); // Save current order
 
-          const newOrderItems: OrderItem[] = customer.products
-            .map(cp => {
-              const inventory = customerInventory.find(i => i.productId === cp.productId);
-              const currentStock = inventory?.currentStock || 0;
-              const idealStock = cp.idealStock;
+          const newOrderItems: OrderItem[] = customerProducts
+            .map(product => {
+              const inventoryItem = inventory?.find(i => i.id === product.id);
+              const currentStock = inventoryItem?.currentStock || 0;
+              
+              const configItem = productConfigs?.find(pc => pc.id === product.id);
+              const idealStock = configItem?.idealStock || 0;
+
               const suggestedQuantity = Math.max(0, idealStock - currentStock);
-              return { productId: cp.productId, quantity: suggestedQuantity };
+              return { productId: product.id, quantity: suggestedQuantity };
             })
             .filter(item => item.quantity > 0);
             
@@ -152,18 +186,18 @@ export default function NewOrderPage() {
             description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
           });
         } finally {
-          setIsLoading(false);
+          setIsCalculatingSuggestions(false);
         }
       }, 300);
     }
-  }, [isSuggestionModeActive, orderItems, preSuggestionOrderItems, toast]);
+  }, [isSuggestionModeActive, orderItems, preSuggestionOrderItems, toast, inventory, productConfigs, isDataLoading]);
   
   useEffect(() => {
     const suggestedParam = searchParams.get('suggested');
-    if (suggestedParam === 'true' && !isSuggestionModeActive && !isLoading && orderItems.length === 0) {
+    if (suggestedParam === 'true' && !isSuggestionModeActive && !isCalculatingSuggestions && !isDataLoading && orderItems.length === 0) {
       toggleSuggestionMode();
     }
-  }, [searchParams, isSuggestionModeActive, isLoading, orderItems.length, toggleSuggestionMode]);
+  }, [searchParams, isSuggestionModeActive, isCalculatingSuggestions, isDataLoading, orderItems.length, toggleSuggestionMode]);
 
   const handleSubmitOrder = () => {
     if (orderItems.length === 0) {
@@ -217,14 +251,14 @@ export default function NewOrderPage() {
         <h1 className="font-headline text-3xl font-bold">Νέα Παραγγελία</h1>
         <Button 
           onClick={toggleSuggestionMode} 
-          disabled={isLoading} 
+          disabled={isCalculatingSuggestions} 
           variant={isSuggestionModeActive ? 'default' : 'outline'}
           className={cn('sm:w-auto w-full', {
             "bg-primary hover:bg-primary/90 text-primary-foreground border-primary": isSuggestionModeActive,
             "border-primary text-primary bg-transparent hover:bg-primary/10": !isSuggestionModeActive,
           })}
         >
-          {isLoading ? (
+          {isCalculatingSuggestions ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             <Lightbulb className="mr-2 h-4 w-4" />
