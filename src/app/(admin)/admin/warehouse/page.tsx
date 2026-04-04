@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { products as allProducts, wholesalerStock as initialWholesalerStock } from '@/lib/data';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { AdminWarehouseCounting } from './counting';
 import { AdminWarehouseDatabase } from './database';
@@ -56,6 +56,7 @@ export default function AdminWarehousePage() {
     const [activeTab, setActiveTab] = useState<string>('wh1');
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [newWarehouseName, setNewWarehouseName] = useState('');
+    const isInitialMount = useRef(true);
     
     const { toast } = useToast();
 
@@ -81,6 +82,10 @@ export default function AdminWarehousePage() {
     }, []);
 
     useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
         localStorage.setItem('admin_warehouses', JSON.stringify(warehouses));
         if (warehouses.some(w => w.id === activeTab)) {
             localStorage.setItem('admin_warehouses_active_tab', activeTab);
