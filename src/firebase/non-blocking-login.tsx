@@ -63,11 +63,12 @@ export function initiateEmailSignIn(
   authInstance: Auth,
   email: string,
   password: string,
-  onSuccess: () => void
+  onSuccess: (user: User) => void,
+  onFinally?: () => void
 ): void {
   signInWithEmailAndPassword(authInstance, email, password)
-    .then(() => {
-      onSuccess();
+    .then((userCredential) => {
+      onSuccess(userCredential.user);
     })
     .catch((error) => {
       let title = 'Σφάλμα Σύνδεσης';
@@ -92,5 +93,8 @@ export function initiateEmailSignIn(
         title: title,
         description: description,
       });
+    })
+    .finally(() => {
+        onFinally?.();
     });
 }

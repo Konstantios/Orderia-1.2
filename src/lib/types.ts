@@ -40,6 +40,17 @@ export interface Store {
     email: string;
     address: string;
     ownerId: string;
+    managerUids: string[];
+}
+
+export interface Wholesaler {
+    id: string;
+    companyName: string;
+    email: string;
+    ownerId: string;
+    ownerName: string;
+    adminUids: string[];
+    taxId: string;
 }
 
 export interface CustomerInventoryItem {

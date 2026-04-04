@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { 
@@ -42,13 +42,9 @@ import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking,
 import { collection, query, where, doc, writeBatch, arrayUnion } from "firebase/firestore";
 import type { Store } from "@/lib/types";
 
-const teamMembersData = [
-    { id: '1', name: 'Φώτης Γεωργίου', email: 'store@tastebakery.gr', role: 'Ιδιοκτήτης' },
-    { id: '2', name: 'Ελένη Παπαδάκη', email: 'eleni@tastebakery.gr', role: 'Υπάλληλος' },
-]
-
 type JoinRequest = {
     requesterName: string;
+    requesterEmail: string;
     requesterUid: string;
     businessId: string;
     businessType: 'store' | 'wholesaler';
@@ -57,24 +53,55 @@ type JoinRequest = {
 export default function TeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-    const [teamMembers, setTeamMembers] = useState(teamMembersData);
     
     const { user, firestore, isUserLoading } = useFirebase();
 
     // 1. Fetch user's store
     const storeQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return query(collection(firestore, 'stores'), where("ownerId", "==", user.uid));
+        return query(collection(firestore, 'stores'), where("managerUids", "array-contains", user.uid));
     }, [firestore, user]);
     const { data: stores, isLoading: isLoadingStores } = useCollection<Store>(storeQuery);
     const store = stores?.[0];
 
-    // 2. Fetch join requests for this store
+    // 2. Fetch pending join requests for this store
     const requestsQuery = useMemoFirebase(() => {
         if (!firestore || !store) return null;
         return query(collection(firestore, 'joinRequests'), where("businessId", "==", store.id), where("status", "==", "pending"));
     }, [firestore, store]);
     const { data: pendingRequests, isLoading: isLoadingRequests } = useCollection<any>(requestsQuery);
+
+    // 3. Fetch approved requests to build team list
+    const approvedRequestsQuery = useMemoFirebase(() => {
+        if (!firestore || !store) return null;
+        return query(collection(firestore, 'joinRequests'), where("businessId", "==", store.id), where("status", "==", "approved"));
+    }, [firestore, store]);
+    const { data: approvedRequests, isLoading: isLoadingApproved } = useCollection<any>(approvedRequestsQuery);
+    
+    const teamMembers = useMemo(() => {
+        if (!store) return [];
+        
+        const owner = {
+            id: store.ownerId,
+            name: store.ownerName,
+            email: store.email,
+            role: 'Ιδιοκτήτης',
+        };
+
+        const members = (approvedRequests || []).map(req => ({
+            id: req.requesterUid,
+            name: req.requesterName,
+            email: req.requesterEmail,
+            role: 'Υπάλληλος',
+        }));
+
+        const memberUids = new Set(members.map(m => m.id));
+        if (memberUids.has(owner.id)) {
+             return members.map(m => m.id === owner.id ? {...m, role: 'Ιδιοκτήτης'} : m);
+        }
+
+        return [owner, ...members];
+    }, [store, approvedRequests]);
 
 
     const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
@@ -236,8 +263,14 @@ export default function TeamPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teamMembers.map((member) => (
-                                <TableRow key={member.email}>
+                            {(isLoadingStores || isLoadingApproved) ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center">
+                                        <Loader2 className="inline-block h-6 w-6 animate-spin" />
+                                    </TableCell>
+                                </TableRow>
+                            ) : teamMembers.map((member) => (
+                                <TableRow key={member.id}>
                                     <TableCell className="font-medium">{member.name}</TableCell>
                                     <TableCell className="text-muted-foreground">{member.email}</TableCell>
                                     <TableCell>
@@ -267,5 +300,3 @@ export default function TeamPage() {
         </div>
     );
 }
-
-    

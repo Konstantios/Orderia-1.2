@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { 
@@ -40,15 +40,11 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking, WithId } from "@/firebase";
 import { collection, query, where, doc, writeBatch, arrayUnion } from "firebase/firestore";
-
-const teamMembersData = [
-    { id: '1', name: 'Νίκος Παπαδόπουλος', email: 'admin@frozenfoods.gr', role: 'Διαχειριστής' },
-    { id: '2', name: 'Μαρία Γεωργίου', email: 'maria@frozenfoods.gr', role: 'Αποθηκάριος' },
-    { id: '3', name: 'Γιάννης Αντωνίου', email: 'giannis@frozenfoods.gr', role: 'Πωλητής' },
-]
+import type { Wholesaler } from "@/lib/types";
 
 type JoinRequest = {
     requesterName: string;
+    requesterEmail: string;
     requesterUid: string;
     businessId: string;
     businessType: 'store' | 'wholesaler';
@@ -57,24 +53,55 @@ type JoinRequest = {
 export default function AdminTeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-    const [teamMembers, setTeamMembers] = useState(teamMembersData);
     
     const { user, firestore, isUserLoading } = useFirebase();
 
     // 1. Fetch user's wholesaler
     const wholesalerQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return query(collection(firestore, 'wholesalers'), where("ownerId", "==", user.uid));
+        return query(collection(firestore, 'wholesalers'), where("adminUids", "array-contains", user.uid));
     }, [firestore, user]);
-    const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<any>(wholesalerQuery);
+    const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<Wholesaler>(wholesalerQuery);
     const wholesaler = wholesalers?.[0];
     
-    // 2. Fetch join requests for this wholesaler
+    // 2. Fetch pending join requests for this wholesaler
     const requestsQuery = useMemoFirebase(() => {
         if (!firestore || !wholesaler) return null;
         return query(collection(firestore, 'joinRequests'), where("businessId", "==", wholesaler.id), where("status", "==", "pending"));
     }, [firestore, wholesaler]);
     const { data: pendingRequests, isLoading: isLoadingRequests } = useCollection<any>(requestsQuery);
+
+    // 3. Fetch approved requests to build team list
+    const approvedRequestsQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesaler) return null;
+        return query(collection(firestore, 'joinRequests'), where("businessId", "==", wholesaler.id), where("status", "==", "approved"));
+    }, [firestore, wholesaler]);
+    const { data: approvedRequests, isLoading: isLoadingApproved } = useCollection<any>(approvedRequestsQuery);
+
+    const teamMembers = useMemo(() => {
+        if (!wholesaler) return [];
+        
+        const owner = {
+            id: wholesaler.ownerId,
+            name: wholesaler.ownerName || 'Ιδιοκτήτης',
+            email: wholesaler.email,
+            role: 'Διαχειριστής',
+        };
+
+        const members = (approvedRequests || []).map(req => ({
+            id: req.requesterUid,
+            name: req.requesterName,
+            email: req.requesterEmail,
+            role: 'Μέλος',
+        }));
+        
+        const memberUids = new Set(members.map(m => m.id));
+        if (memberUids.has(owner.id)) {
+            return members.map(m => m.id === owner.id ? {...m, role: 'Διαχειριστής'} : m);
+        }
+
+        return [owner, ...members];
+    }, [wholesaler, approvedRequests]);
 
 
     const handleInvite = (event: React.FormEvent<HTMLFormElement>) => {
@@ -237,8 +264,14 @@ export default function AdminTeamPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teamMembers.map((member) => (
-                                <TableRow key={member.email}>
+                            {(isLoadingWholesalers || isLoadingApproved) ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center">
+                                        <Loader2 className="inline-block h-6 w-6 animate-spin" />
+                                    </TableCell>
+                                </TableRow>
+                            ) : teamMembers.map((member) => (
+                                <TableRow key={member.id}>
                                     <TableCell className="font-medium">{member.name}</TableCell>
                                     <TableCell className="text-muted-foreground">{member.email}</TableCell>
                                     <TableCell>
@@ -268,5 +301,3 @@ export default function AdminTeamPage() {
         </div>
     );
 }
-
-    

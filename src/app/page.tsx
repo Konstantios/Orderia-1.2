@@ -10,7 +10,7 @@ import { Logo } from '@/components/logo';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Building, UserPlus, ArrowLeft } from 'lucide-react';
+import { Search, Building, UserPlus, ArrowLeft, Loader2 } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { initiateEmailSignUp, initiateEmailSignIn, useFirebase, addDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, where, updateDoc, getDoc, arrayUnion, addDoc } from 'firebase/firestore';
@@ -24,6 +24,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [dialogView, setDialogView] = useState<'initial' | 'join' | 'register'>('initial');
@@ -55,18 +56,40 @@ export default function LoginPage() {
         });
         return;
     }
+    setIsLoggingIn(true);
 
-    const onSuccess = () => {
-        // This is a temporary solution for the demo to route to the correct dashboard.
-        // A better solution would involve custom claims or user roles.
-        if (email === 'admin@frozenfoods.gr') {
-            router.push('/admin/dashboard');
-        } else {
+    const onSuccess = async (user: User) => {
+        if (!firestore) {
+            setIsLoggingIn(false);
+            return;
+        }
+        
+        try {
+            // Check if user is part of a wholesaler
+            const wholesalersRef = collection(firestore, 'wholesalers');
+            const qWholesalerOwner = query(wholesalersRef, where("ownerId", "==", user.uid));
+            const qWholesalerAdmin = query(wholesalersRef, where("adminUids", "array-contains", user.uid));
+
+            const [ownerSnap, adminSnap] = await Promise.all([
+                getDocs(qWholesalerOwner),
+                getDocs(qWholesalerAdmin)
+            ]);
+
+            if (!ownerSnap.empty || !adminSnap.empty) {
+                router.push('/admin/dashboard');
+                return;
+            }
+
+            // If not a wholesaler, assume they are a store user and redirect to the main dashboard
             router.push('/dashboard');
+        } catch (error) {
+            console.error("Error during post-login check:", error);
+            toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν ήταν δυνατή η επαλήθευση του ρόλου σας." });
+            setIsLoggingIn(false);
         }
     };
     
-    initiateEmailSignIn(auth, email, password, onSuccess);
+    initiateEmailSignIn(auth, email, password, onSuccess, () => setIsLoggingIn(false));
   };
 
   const handleSearchBusiness = async () => {
@@ -222,6 +245,7 @@ export default function LoginPage() {
             newDocData = {
                 companyName: businessName,
                 taxId: taxId,
+                ownerName: ownerName,
                 email: email,
                 ownerId: user.uid,
                 adminUids: [user.uid],
@@ -341,8 +365,8 @@ export default function LoginPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg h-12">
-              Σύνδεση
+            <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg h-12" disabled={isLoggingIn}>
+              {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Σύνδεση'}
             </Button>
              <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
                 <DialogTrigger asChild>
