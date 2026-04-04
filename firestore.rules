@@ -82,8 +82,12 @@ service cloud.firestore {
     
     function isBusinessOwner(businessId, businessType) {
       let path = businessType == 'store' ? /databases/$(database)/documents/stores/$(businessId) : /databases/$(database)/documents/wholesalers/$(businessId);
-      let doc = get(path).data;
-      return (businessType == 'store' && isStoreMember(doc)) || (businessType == 'wholesaler' && isWholesalerMember(doc));
+      let businessDoc = get(path);
+      if (!businessDoc.exists()) {
+        return false;
+      }
+      let docData = businessDoc.data;
+      return (businessType == 'store' && isStoreMember(docData)) || (businessType == 'wholesaler' && isWholesalerMember(docData));
     }
 
 
@@ -245,7 +249,7 @@ service cloud.firestore {
     match /joinRequests/{requestId} {
       allow create: if true; // Public submission form
       allow get: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
-      allow list: if isSignedIn(); // Only business owners can list their requests
+      allow list: if isSignedIn() && request.query.businessId != null && (isBusinessOwner(request.query.businessId, 'wholesaler') || isBusinessOwner(request.query.businessId, 'store'));
       allow update, delete: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
     }
 
@@ -258,7 +262,7 @@ service cloud.firestore {
      */
     match /supplierStoreRequests/{requestId} {
       allow get: if isEitherPartyMember(resource.data);
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && ((request.query.wholesalerId != null && isWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(request.query.wholesalerId)).data)) || (request.query.storeId != null && isStoreMember(get(/databases/$(database)/documents/stores/$(request.query.storeId)).data)));
       allow create: if isEitherPartyMember(request.resource.data);
       allow update: if isExistingEitherPartyMember(resource.data);
       allow delete: if isExistingEitherPartyMember(resource.data);
@@ -273,7 +277,7 @@ service cloud.firestore {
      */
     match /supplierStoreConnections/{connectionId} {
       allow get: if isEitherPartyMember(resource.data);
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && ((request.query.wholesalerId != null && isWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(request.query.wholesalerId)).data)) || (request.query.storeId != null && isStoreMember(get(/databases/$(database)/documents/stores/$(request.query.storeId)).data)));
       allow create: if isEitherPartyMember(request.resource.data);
       allow update: if isExistingEitherPartyMember(resource.data);
       allow delete: if isExistingEitherPartyMember(resource.data);
@@ -288,7 +292,7 @@ service cloud.firestore {
      */
     match /orders/{orderId} {
       allow get: if isEitherPartyMember(resource.data);
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && ((request.query.wholesalerId != null && isWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(request.query.wholesalerId)).data)) || (request.query.storeId != null && isStoreMember(get(/databases/$(database)/documents/stores/$(request.query.storeId)).data)));
       allow create: if isEitherPartyMember(request.resource.data);
       allow update: if isExistingEitherPartyMember(resource.data) && request.resource.data.storeId == resource.data.storeId && request.resource.data.wholesalerId == resource.data.wholesalerId;
       allow delete: if isExistingEitherPartyMember(resource.data);
