@@ -176,10 +176,25 @@ export default function LoginPage() {
       <Card className="mt-8 w-full max-w-sm border-2 border-primary/20 bg-card/80 shadow-lg shadow-primary/10">
         <CardHeader>
           <CardTitle>Σύνδεση</CardTitle>
-          <CardDescription>Συμπληρώστε τα στοιχεία σας για να συνδεθείτε.</CardDescription>
+          <CardDescription>Για είσοδο, χρησιμοποιήστε τους παρακάτω δοκιμαστικούς λογαριασμούς, ή δημιουργήστε τη δική σας επιχείρηση.</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
+             <div className="text-sm text-center bg-muted/50 p-3 rounded-lg">
+                <p><span className="font-semibold">Προμηθευτής:</span> admin@frozenfoods.gr</p>
+                <p><span className="font-semibold">Κατάστημα:</span> store@tastebakery.gr</p>
+                <p><span className="font-semibold">Κωδικός (για όλους):</span> password123</p>
+            </div>
+             <div className="relative pt-2">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">
+                        Σύνδεση
+                    </span>
+                </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="user@example.com"/>

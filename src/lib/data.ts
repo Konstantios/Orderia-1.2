@@ -21,7 +21,7 @@ export const customers: Customer[] = [
   {
     id: 'c1',
     name: 'Frozen Foods', // Renamed to match supplier in screenshot
-    email: 'demo@bakery.com',
+    email: 'store@tastebakery.gr',
     products: [
       { productId: 'p1', idealStock: 30 }, // Pizza
       { productId: 'p2', idealStock: 25 }, // Croissant
@@ -104,11 +104,11 @@ export const adminCustomers: AdminCustomer[] = [
 
 // Updated inventory to match the screenshot
 export const customerInventory: CustomerInventoryItem[] = [
-  { productId: 'p1', currentStock: 5, lastAction: { type: 'καταμέτρηση', value: 5 } },   // Pizza
-  { productId: 'p2', currentStock: 12, lastAction: { type: 'είσοδος', value: 10 } },  // Croissant
-  { productId: 'p3', currentStock: 38, lastAction: { type: 'έξοδος', value: 2 } },  // Bougatsa
+  { productId: 'p1', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Pizza
+  { productId: 'p2', currentStock: 12, lastAction: { type: 'in', value: 10 } },  // Croissant
+  { productId: 'p3', currentStock: 38, lastAction: { type: 'out', value: 2 } },  // Bougatsa
   { productId: 'p4', currentStock: 18 },  // Kourou
-  { productId: 'p5', currentStock: 5, lastAction: { type: 'καταμέτρηση', value: 5 } },   // Spanakopita, keep for other pages
+  { productId: 'p5', currentStock: 5, lastAction: { type: 'counting', value: 5 } },   // Spanakopita, keep for other pages
 ];
 
 export const orderHistory: Order[] = [
