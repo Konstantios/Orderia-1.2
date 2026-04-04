@@ -6,15 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { products, adminCustomers } from "@/lib/data";
+import { products } from "@/lib/data";
 import type { Order, Wholesaler } from "@/lib/types";
 import { Download, History, Loader2 } from "lucide-react";
-import { format, addDays } from 'date-fns';
+import { format, addDays, isSameDay } from 'date-fns';
 import { el } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 
 export default function AdminOrdersPage() {
     const router = useRouter();
@@ -31,7 +31,7 @@ export default function AdminOrdersPage() {
 
     const ordersQuery = useMemoFirebase(() => {
         if (!firestore || !user) return null;
-        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), orderBy('date', 'desc'));
+        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), where('status', '==', 'Εκκρεμής'), orderBy('date', 'desc'));
     }, [firestore, user]);
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 
@@ -56,27 +56,20 @@ export default function AdminOrdersPage() {
     }, [activeTab]);
 
 
-    const { ordersForDay, customersWithoutOrders } = useMemo(() => {
+    const ordersForDay = useMemo(() => {
         const selectedDayInfo = nextSevenDays.find(d => d.dateString === activeTab);
         if (!selectedDayInfo || !orders) {
-            return { ordersForDay: [], customersWithoutOrders: [] };
+            return [];
         }
 
-        const dayName = selectedDayInfo.dayName;
+        const selectedDate = selectedDayInfo.date;
         
-        const customersForDay = adminCustomers.filter(c => c.deliveryDay === dayName);
-        const customerNamesForDay = new Set(customersForDay.map(c => c.companyName));
+        const filteredOrders = orders.filter(o => {
+            const orderDate = (o.date as unknown as Timestamp)?.toDate();
+            return orderDate && isSameDay(orderDate, selectedDate);
+        });
 
-        const filteredOrders = orders.filter(o => 
-            o.status === 'Εκκρεμής' && customerNamesForDay.has(o.customerName)
-        );
-
-        const customersWhoHaveOrdered = new Set(filteredOrders.map(o => o.customerName));
-        const customersWithoutOrders = customersForDay.filter(
-            c => !customersWhoHaveOrdered.has(c.companyName)
-        );
-
-        return { ordersForDay: filteredOrders, customersWithoutOrders };
+        return filteredOrders;
     }, [activeTab, orders, nextSevenDays]);
 
 
@@ -134,7 +127,7 @@ export default function AdminOrdersPage() {
         worksheet['!cols'] = colWidths;
         
         const selectedDayInfo = nextSevenDays.find(d => d.dateString === activeTab);
-        const fileName = `Παραδόσεις_${selectedDayInfo?.dayName}_${selectedDayInfo?.formattedDate.replace('/', '-')}.xlsx`;
+        const fileName = `Παραγγελίες_${selectedDayInfo?.dayName}_${selectedDayInfo?.formattedDate.replace('/', '-')}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
 
@@ -149,7 +142,7 @@ export default function AdminOrdersPage() {
             </div>
             
             <div className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">ημέρα αποστολής-παράδοσης</h2>
+                <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Ημερομηνια Παραγγελιας</h2>
                 {nextSevenDays.length > 0 && (
                 <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-7">
@@ -185,38 +178,8 @@ export default function AdminOrdersPage() {
                                         </Card>
                                     ))}
         
-                                    {ordersForDay.length > 0 && customersWithoutOrders.length > 0 && (
-                                        <div className="relative py-4">
-                                            <div className="absolute inset-0 flex items-center">
-                                                <span className="w-full border-t" />
-                                            </div>
-                                            <div className="relative flex justify-center">
-                                                <span className="bg-background px-2 text-xs uppercase text-muted-foreground">
-                                                    Δεν έχουν παραγγείλει
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    {customersWithoutOrders.map(customer => (
-                                        <Card key={customer.id} className="opacity-60 bg-muted/20">
-                                            <CardHeader>
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <CardTitle className="text-lg">{customer.companyName}</CardTitle>
-                                                        <CardDescription>Δεν έχει υποβληθεί παραγγελία</CardDescription>
-                                                    </div>
-                                                    <Badge variant="outline">Εκκρεμεί</Badge>
-                                                </div>
-                                            </CardHeader>
-                                             <CardContent>
-                                                <p className="text-sm text-muted-foreground">Τηλέφωνο: {customer.phone1}</p>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                    
-                                    {ordersForDay.length === 0 && customersWithoutOrders.length === 0 && (
-                                        <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν παραγγελίες ή πελάτες για παράδοση αυτήν την ημέρα.</p>
+                                    {ordersForDay.length === 0 && (
+                                        <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν εκκρεμείς παραγγελίες για αυτή την ημέρα.</p>
                                     )}
                                 </>
                             )}
