@@ -231,7 +231,7 @@ export default function AdminDashboardPage() {
 
   const { todayOrders, pendingOrders } = useMemo(() => {
     if (!orders) return { todayOrders: 0, pendingOrders: 0 };
-    const todayOrdersCount = orders.filter(o => isToday(new Date(o.date))).length;
+    const todayOrdersCount = orders.filter(o => isToday((o.date as unknown as Timestamp).toDate())).length;
     const pendingOrdersCount = orders.filter(o => o.status === 'Εκκρεμής').length;
     return { todayOrders: todayOrdersCount, pendingOrders: pendingOrdersCount };
   }, [orders]);
@@ -239,22 +239,97 @@ export default function AdminDashboardPage() {
   const salesData = useMemo(() => {
     const getOrderTotalItems = (order: Order) => order.items.reduce((sum, item) => sum + item.quantity, 0);
 
-    if (!orders) {
+    if (!orders || !wholesaler) {
       return { daily: [], weekly: [], monthly: [] };
     }
+    
+    // --- SPECIAL CASE for dummy supplier to show historical data ---
+    if (wholesaler.email === 'admin@frozenfoods.gr') {
+        const now = new Date();
+
+        // --- Daily Data ---
+        const fakeDailyData = [
+            { items: 20, change: -10 },
+            { items: 30, change: 15 },
+            { items: 15, change: -5 },
+            { items: 20, change: 8 },
+            { items: 12, change: 2 },
+        ];
+        
+        const todayItems = orders.filter(o => isToday((o.date as unknown as Timestamp).toDate())).reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+        const yesterdayItems = 25; // Hardcoded fake value
+        
+        const daily = Array.from({ length: 7 }).map((_, i) => {
+            const targetDate = subDays(now, i);
+            let periodLabel = format(targetDate, 'dd/MM');
+
+            if (i === 0) return { period: 'Σήμερα', items: todayItems, change: todayItems - yesterdayItems };
+            if (i === 1) return { period: 'Χθες', items: yesterdayItems, change: yesterdayItems - fakeDailyData[0].items };
+            if (i > 1 && i-2 < fakeDailyData.length) {
+                return {
+                    period: periodLabel,
+                    items: fakeDailyData[i - 2].items,
+                    change: fakeDailyData[i - 2].change
+                };
+            }
+            return { period: periodLabel, items: 0, change: 0 }; // Fallback
+        });
+
+        // --- Weekly Data ---
+        const fakeWeeklyData = [130, 110, 120];
+        const weekly = Array.from({ length: 4 }).map((_, i) => {
+            const weekAgo = subWeeks(now, i);
+            const start = startOfWeek(weekAgo, { weekStartsOn: 1 });
+            const end = endOfWeek(weekAgo, { weekStartsOn: 1 });
+            
+            let periodLabel = `${format(start, 'dd/MM')} - ${format(end, 'dd/MM')}`;
+            if (i === 0) periodLabel = "Αυτή η εβδομάδα";
+            if (i === 1) periodLabel = "Προηγούμενη εβδ.";
+
+            if (i === 0) {
+                const currentWeekItems = orders.filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start, end })).reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+                return { period: periodLabel, items: currentWeekItems, change: currentWeekItems - fakeWeeklyData[0] };
+            }
+            if (i > 0 && i-1 < fakeWeeklyData.length) {
+                return { period: periodLabel, items: fakeWeeklyData[i-1], change: fakeWeeklyData[i-1] - (fakeWeeklyData[i] || fakeWeeklyData[i-1] - 15) };
+            }
+            return { period: periodLabel, items: 0, change: 0 };
+        });
+
+        // --- Monthly Data ---
+        const fakeMonthlyData = [550, 560, 530, 540, 520];
+        const monthly = Array.from({ length: 6 }).map((_, i) => {
+            const monthAgo = subMonths(now, i);
+            const start = startOfMonth(monthAgo);
+            const end = endOfMonth(monthAgo);
+            const periodLabel = format(monthAgo, 'LLLL', { locale: el });
+
+            if (i === 0) {
+                const currentMonthItems = orders.filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start, end })).reduce((sum, o) => sum + getOrderTotalItems(o), 0);
+                return { period: periodLabel, items: currentMonthItems, change: currentMonthItems - fakeMonthlyData[0] };
+            }
+            if (i > 0 && i-1 < fakeMonthlyData.length) {
+                return { period: periodLabel, items: fakeMonthlyData[i-1], change: fakeMonthlyData[i-1] - (fakeMonthlyData[i] || fakeMonthlyData[i-1] - 20) };
+            }
+            return { period: periodLabel, items: 0, change: 0 };
+        });
+
+        return { daily, weekly, monthly };
+    }
+
+    // --- REGULAR LOGIC for all other suppliers ---
     const now = new Date();
 
-    // Daily
     const daily = Array.from({ length: 7 }).map((_, i) => {
         const targetDate = subDays(now, i);
         const prevTargetDate = subDays(now, i + 1);
 
         const items = orders
-            .filter(o => isSameDay(new Date(o.date), targetDate))
+            .filter(o => isSameDay((o.date as unknown as Timestamp).toDate(), targetDate))
             .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
         
         const prevItems = orders
-            .filter(o => isSameDay(new Date(o.date), prevTargetDate))
+            .filter(o => isSameDay((o.date as unknown as Timestamp).toDate(), prevTargetDate))
             .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
 
         let periodLabel = format(targetDate, 'dd/MM');
@@ -264,7 +339,6 @@ export default function AdminDashboardPage() {
         return { period: periodLabel, items, change: items - prevItems };
     });
 
-    // Weekly
     const weekly = Array.from({ length: 4 }).map((_, i) => {
       const weekAgo = subWeeks(now, i);
       const start = startOfWeek(weekAgo, { weekStartsOn: 1 });
@@ -275,11 +349,11 @@ export default function AdminDashboardPage() {
       const prevEnd = endOfWeek(prevWeekAgo, { weekStartsOn: 1 });
       
       const items = orders
-          .filter(o => isWithinInterval(new Date(o.date), { start, end }))
+          .filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start, end }))
           .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
       
       const prevItems = orders
-          .filter(o => isWithinInterval(new Date(o.date), { start: prevStart, end: prevEnd }))
+          .filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start: prevStart, end: prevEnd }))
           .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
       
       let periodLabel = `${format(start, 'dd/MM')} - ${format(end, 'dd/MM')}`;
@@ -289,7 +363,6 @@ export default function AdminDashboardPage() {
       return { period: periodLabel, items, change: items - prevItems };
     });
     
-    // Monthly
     const monthly = Array.from({ length: 6 }).map((_, i) => {
         const monthAgo = subMonths(now, i);
         const start = startOfMonth(monthAgo);
@@ -300,18 +373,18 @@ export default function AdminDashboardPage() {
         const prevEnd = endOfMonth(prevMonthAgo);
 
         const items = orders
-            .filter(o => isWithinInterval(new Date(o.date), { start, end }))
+            .filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start, end }))
             .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
         
         const prevItems = orders
-            .filter(o => isWithinInterval(new Date(o.date), { start: prevStart, end: prevEnd }))
+            .filter(o => isWithinInterval((o.date as unknown as Timestamp).toDate(), { start: prevStart, end: prevEnd }))
             .reduce((sum, o) => sum + getOrderTotalItems(o), 0);
         
         return { period: format(monthAgo, 'LLLL', { locale: el }), items, change: items - prevItems };
     });
 
     return { daily, weekly, monthly };
-  }, [orders]);
+  }, [orders, wholesaler]);
 
 
   const lowStockItems = useMemo(() => {
@@ -451,7 +524,7 @@ export default function AdminDashboardPage() {
            <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Post-it</CardTitle>
-                <Button variant="ghost" size="icon" onClick={() => openNoteDialog({})}>
+                <Button variant="ghost" size="icon" onClick={() => openNoteDialog(null)}>
                     <PlusCircle className="h-5 w-5" />
                 </Button>
             </CardHeader>
@@ -564,5 +637,3 @@ export default function AdminDashboardPage() {
     </>
   )
 }
-
-    
