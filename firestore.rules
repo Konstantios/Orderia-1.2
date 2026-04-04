@@ -190,11 +190,8 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /postits/{postitId} {
-        allow get: if isWholesalerMember(resource.data);
-        allow list: if canAccessWholesalerSubcollection(wholesalerId);
-        allow create: if canAccessWholesalerSubcollection(wholesalerId) && isWholesalerMember(request.resource.data);
-        allow update: if isExistingWholesalerMember(resource.data);
-        allow delete: if isExistingWholesalerMember(resource.data);
+        allow read: if isWholesalerMember(resource.data);
+        allow write: if canAccessWholesalerSubcollection(wholesalerId);
       }
     }
 
@@ -226,10 +223,8 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /productConfigurations/{configId} {
-        allow get, list: if canAccessStoreSubcollection(storeId);
-        allow create: if canAccessStoreSubcollection(storeId) && isStoreMember(request.resource.data) && request.resource.data.storeId == storeId;
-        allow update: if canAccessStoreSubcollection(storeId) && isStoreMember(resource.data) && request.resource.data.storeId == resource.data.storeId;
-        allow delete: if canAccessStoreSubcollection(storeId) && isStoreMember(resource.data);
+        allow read: if canAccessStoreSubcollection(storeId);
+        allow write: if canAccessStoreSubcollection(storeId);
       }
 
       /**
@@ -240,9 +235,8 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /inventories/{storeInventoryId} {
-          allow get, list: if canAccessStoreSubcollection(storeId);
-          allow create: if canAccessStoreSubcollection(storeId) && isStoreMember(request.resource.data) && request.resource.data.storeId == storeId;
-          allow update, delete: if canAccessStoreSubcollection(storeId);
+          allow read: if canAccessStoreSubcollection(storeId);
+          allow write: if canAccessStoreSubcollection(storeId);
       }
     }
 
@@ -290,13 +284,12 @@ service cloud.firestore {
     /**
      * @description Represents an order placed by a store to a wholesaler.
      * @path /orders/{orderId}
-     * @allow (get) A user who is a member of the store that placed the order or the wholesaler that received it.
+     * @allow (read) A user who is a member of the store that placed the order or the wholesaler that received it.
      * @deny (update) An unrelated third-party user trying to modify the order status.
      * @principle Secures collaborative documents by checking membership of either participating entity.
      */
     match /orders/{orderId} {
-      allow get: if isEitherPartyMember(resource.data);
-      allow list: if isSignedIn() && ((request.query.wholesalerId != null && isWholesalerMember(get(/databases/$(database)/documents/wholesalers/$(request.query.wholesalerId)).data)) || (request.query.storeId != null && isStoreMember(get(/databases/$(database)/documents/stores/$(request.query.storeId)).data)));
+      allow read: if isEitherPartyMember(resource.data);
       allow create: if isEitherPartyMember(request.resource.data);
       allow update: if isExistingEitherPartyMember(resource.data) && request.resource.data.storeId == resource.data.storeId && request.resource.data.wholesalerId == resource.data.wholesalerId;
       allow delete: if isExistingEitherPartyMember(resource.data);
