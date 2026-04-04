@@ -135,7 +135,7 @@ service cloud.firestore {
      */
     match /wholesalers/{wholesalerId} {
       allow get: if isWholesalerMember(resource.data);
-      allow list: if isSignedIn();
+      allow list: if true; // Allow unauthenticated search for join-by-AFM
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingWholesalerMember(resource.data);
       allow delete: if isExistingWholesalerMember(resource.data);
@@ -193,7 +193,7 @@ service cloud.firestore {
      */
     match /stores/{storeId} {
       allow get: if isStoreMember(resource.data);
-      allow list: if isSignedIn();
+      allow list: if true; // Allow unauthenticated search for join-by-AFM
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingStoreMember(resource.data);
       allow delete: if isExistingStoreMember(resource.data);
@@ -206,8 +206,7 @@ service cloud.firestore {
        * @principle Subcollection access is granted based on membership in the parent entity.
        */
       match /productConfigurations/{configId} {
-        allow get: if isStoreMember(resource.data);
-        allow list: if canAccessStoreSubcollection(storeId);
+        allow get, list: if canAccessStoreSubcollection(storeId);
         allow create: if isSignedIn() && request.resource.data.storeId == storeId && request.resource.data.ownerId == request.auth.uid;
         allow update: if isExistingStoreMember(resource.data) && request.resource.data.storeId == resource.data.storeId;
         allow delete: if isExistingStoreMember(resource.data);
@@ -235,7 +234,7 @@ service cloud.firestore {
     match /joinRequests/{requestId} {
       allow create: if true; // Public submission form
       allow get: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
-      allow list: if isSignedIn();
+      allow list: if isSignedIn(); // Only business owners can list their requests
       allow update, delete: if isSignedIn() && isBusinessOwner(resource.data.businessId, resource.data.businessType);
     }
 
