@@ -151,6 +151,52 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     {children}
                 </PullToRefresh>
             </main>
+
+            {/* Σταθερή Κάτω Μπάρα Πλοήγησης για Κινητά */}
+            <nav className="lg:hidden shrink-0 border-t bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                <div className="grid h-16 grid-cols-4 items-center justify-items-center">
+                    <Link
+                        href="/admin/dashboard"
+                        className={cn(
+                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
+                            pathname === '/admin/dashboard' ? 'text-primary' : 'text-muted-foreground'
+                        )}
+                    >
+                        <Icons.dashboard className={cn("h-6 w-6 transition-transform", pathname === '/admin/dashboard' && "scale-110")} />
+                        <span>Ταμπλό</span>
+                    </Link>
+                    <Link
+                        href="/admin/orders"
+                        className={cn(
+                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
+                            pathname.startsWith('/admin/orders') ? 'text-primary' : 'text-muted-foreground'
+                        )}
+                    >
+                        <Icons.newOrder className={cn("h-6 w-6 transition-transform", pathname.startsWith('/admin/orders') && "scale-110")} />
+                        <span>Παραγγελίες</span>
+                    </Link>
+                    <Link
+                        href="/admin/customers"
+                        className={cn(
+                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
+                            pathname === '/admin/customers' ? 'text-primary' : 'text-muted-foreground'
+                        )}
+                    >
+                        <Icons.customers className={cn("h-6 w-6 transition-transform", pathname === '/admin/customers' && "scale-110")} />
+                        <span>Πελάτες</span>
+                    </Link>
+                    <Link
+                        href="/admin/warehouse"
+                        className={cn(
+                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
+                            pathname.startsWith('/admin/warehouse') ? 'text-primary' : 'text-muted-foreground'
+                        )}
+                    >
+                        <Icons.warehouse className={cn("h-6 w-6 transition-transform", pathname.startsWith('/admin/warehouse') && "scale-110")} />
+                        <span>Αποθήκη</span>
+                    </Link>
+                </div>
+            </nav>
         </SidebarInset>
     </SidebarProvider>
   );
