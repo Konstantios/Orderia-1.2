@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { MoreHorizontal, PlusCircle, Loader2, CheckCircle2, XCircle, Bell, FileSpreadsheet, Check, Download } from 'lucide-react';
 import type { Store, Wholesaler, SupplierStoreConnection, JoinRequest } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea"
 import * as XLSX from 'xlsx';
 import {
   Dialog,
@@ -187,6 +188,12 @@ export default function AdminCustomersPage() {
     const [isImporting, setIsImporting] = useState(false);
     const [isSendingNotifications, setIsSendingNotifications] = useState(false);
     const [indexErrorLink, setIndexErrorLink] = useState<string | null>(null);
+
+    // Custom notification states
+    const [isCustomNotifDialogOpen, setIsCustomNotifDialogOpen] = useState(false);
+    const [customNotifTitle, setCustomNotifTitle] = useState('');
+    const [customNotifBody, setCustomNotifBody] = useState('');
+    const [isSendingCustomNotif, setIsSendingCustomNotif] = useState(false);
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -557,6 +564,91 @@ export default function AdminCustomersPage() {
             setIsSendingNotifications(false);
         }
     };
+
+    const handleSendCustomNotification = async () => {
+        if (!firestore || !wholesaler || activeTab === 'all' || !customNotifTitle || !customNotifBody) {
+             toast({
+                variant: 'destructive',
+                title: 'Ελλιπή στοιχεία',
+                description: 'Παρακαλώ συμπληρώστε τίτλο και κείμενο για την ειδοποίηση.'
+            });
+            return;
+        }
+        
+        const dayCustomers = customers.filter(c => c.deliveryDay === activeTab);
+        if (dayCustomers.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Κενή Λίστα',
+                description: `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
+            });
+            return;
+        }
+
+        setIsSendingCustomNotif(true);
+
+        try {
+            const batch = writeBatch(firestore);
+            let totalNotifications = 0;
+
+            for (const store of dayCustomers) {
+                const recipientUids = new Set<string>();
+                if (store.ownerId) recipientUids.add(store.ownerId);
+                if (store.managerUids) {
+                    store.managerUids.forEach(uid => recipientUids.add(uid));
+                }
+
+                recipientUids.forEach(uid => {
+                    const notifRef = doc(collection(firestore, 'notifications'));
+                    
+                    const notifData = {
+                        title: customNotifTitle,
+                        description: customNotifBody,
+                        date: new Date().toISOString(),
+                        read: false,
+                        recipientUid: uid,
+                        wholesalerId: wholesaler.id,
+                        wholesalerName: wholesaler.companyName,
+                        type: 'custom_message',
+                        createdAt: serverTimestamp()
+                    };
+                    batch.set(notifRef, notifData);
+                    totalNotifications++;
+
+                    // Trigger real push notification
+                    fetch('/api/notifications/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            recipientUid: uid,
+                            title: customNotifTitle,
+                            body: customNotifBody
+                        })
+                    }).catch(e => console.error('[DEBUG] Push notification failed', e));
+                });
+            }
+
+            if (totalNotifications > 0) {
+                await batch.commit();
+                toast({
+                    title: 'Επιτυχία!',
+                    description: `Στάλθηκαν ${totalNotifications} προσαρμοσμένες ειδοποιήσεις για την ${activeTab}.`
+                });
+                setIsCustomNotifDialogOpen(false);
+                setCustomNotifTitle('');
+                setCustomNotifBody('');
+            }
+        } catch (error: any) {
+            console.error('Error sending custom notifications:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Σφάλμα',
+                description: 'Αποτυχία αποστολής ειδοποιήσεων.'
+            });
+        } finally {
+            setIsSendingCustomNotif(false);
+        }
+    };
     
     const handleDeleteCustomer = async (customerId: string) => {
         if (!firestore || !wholesaler) return;
@@ -741,7 +833,7 @@ export default function AdminCustomersPage() {
                        </div>
 
                        {activeTab !== 'all' && (
-                            <div className="mb-6 animate-in fade-in slide-in-from-top-2">
+                            <div className="mb-6 space-y-3 animate-in fade-in slide-in-from-top-2">
                                 <Button 
                                     className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-lg shadow-amber-500/20 gap-2 border-none transition-all active:scale-95"
                                     onClick={handleSendDeliveryNotification}
@@ -754,6 +846,17 @@ export default function AdminCustomersPage() {
                                     )}
                                     Στείλε ειδοποίηση για Παραγγελία ({activeTab})
                                 </Button>
+                                
+                                <Button 
+                                    variant="outline"
+                                    className="w-full h-12 border-blue-600 text-blue-600 hover:bg-blue-50 font-bold rounded-2xl shadow-sm gap-2 transition-all active:scale-95"
+                                    onClick={() => setIsCustomNotifDialogOpen(true)}
+                                    disabled={combinedLoading}
+                                >
+                                    <PlusCircle className="h-5 w-5" />
+                                    Αποστολή Προσαρμοσμένου Μηνύματος ({activeTab})
+                                </Button>
+
                                 <p className="text-[10px] text-muted-foreground mt-2 text-center">
                                     Θα σταλεί άμεση ειδοποίηση σε όλους τους εγγεγραμμένους χρήστες των καταστημάτων της {activeTab}.
                                 </p>
@@ -911,6 +1014,60 @@ export default function AdminCustomersPage() {
                         <Button onClick={handleConfirmImport} disabled={isImporting}>
                             {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                             Εισαγωγή {parsedCustomers.length} Πελατών
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={isCustomNotifDialogOpen} onOpenChange={setIsCustomNotifDialogOpen}>
+                <DialogContent className="sm:max-w-[500px] rounded-3xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Bell className="h-5 w-5 text-blue-500" />
+                            Αποστολή Μηνύματος ({activeTab})
+                        </DialogTitle>
+                        <DialogDescription>
+                            Στείλτε μια προσαρμοσμένη ειδοποίηση σε όλους τους πελάτες της {activeTab}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="custom-title">Τίτλος</Label>
+                            <Input 
+                                id="custom-title" 
+                                placeholder="π.χ. Αλλαγή Δρομολογίου" 
+                                value={customNotifTitle}
+                                onChange={(e) => setCustomNotifTitle(e.target.value)}
+                                className="rounded-xl"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="custom-body">Μήνυμα</Label>
+                            <Textarea 
+                                id="custom-body" 
+                                placeholder="π.χ. Οι παραγγελίες θα μεταφερθούν την άλλη Τρίτη λόγω αργίας." 
+                                value={customNotifBody}
+                                onChange={(e) => setCustomNotifBody(e.target.value)}
+                                className="rounded-xl min-h-[120px]"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setIsCustomNotifDialogOpen(false)} className="rounded-xl">
+                            Ακύρωση
+                        </Button>
+                        <Button 
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl"
+                            onClick={handleSendCustomNotification}
+                            disabled={isSendingCustomNotif || !customNotifTitle || !customNotifBody}
+                        >
+                            {isSendingCustomNotif ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Αποστολή...
+                                </>
+                            ) : (
+                                'Αποστολή τώρα'
+                            )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
