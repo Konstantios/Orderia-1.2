@@ -208,8 +208,30 @@ export function AdminWarehouseCounting({ products, stock, onSync }: { products: 
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center animate-in fade-in-0">
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-11/12 max-w-sm aspect-[4/3] rounded-2xl border-4 border-dashed border-white/50 relative overflow-hidden">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-red-500/70 shadow-[0_0_10px_2px_theme(colors.red.500)] animate-scan-line"></div>
+            {/* Ambient Darkening Overlay */}
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
+            
+            {/* Futuristic Scanning HUD */}
+            <div className="relative w-11/12 max-w-sm aspect-square bg-white/5 backdrop-blur-[2px] rounded-3xl border border-white/10 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
+                {/* Moving Laser Line */}
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
+                
+                {/* Scanner Viewfinder Corners */}
+                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                
+                {/* Cyberpunk HUD Labels */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
+                   Auto-Detection Active
+                </div>
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
+                   Align Barcode Here
+                </div>
+
+                {/* Grid Effect Overlay */}
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
             </div>
           </div>
           <Button onClick={() => setIsScanning(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-10 bg-black/50 rounded-full h-10 w-10">

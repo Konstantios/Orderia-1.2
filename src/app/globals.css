@@ -82,3 +82,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes scan {
+    0%, 100% { transform: translateY(0); opacity: 0.3; }
+    50% { transform: translateY(280px); opacity: 1; }
+  }
+  .animate-scan-line {
+    animation: scan 2.5s ease-in-out infinite;
+  }
+}
