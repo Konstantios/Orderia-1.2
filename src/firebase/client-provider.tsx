@@ -16,11 +16,17 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
 
   React.useEffect(() => {
     if ('serviceWorker' in navigator && typeof window !== 'undefined') {
-      window.addEventListener('load', () => {
+      const register = () => {
         navigator.serviceWorker.register('/firebase-messaging-sw.js')
           .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
           .catch(err => console.error('[PWA] Service Worker registration failed:', err));
-      });
+      };
+
+      if (document.readyState === 'complete') {
+        register();
+      } else {
+        window.addEventListener('load', register);
+      }
     }
   }, []);
 

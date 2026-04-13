@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     userScalable: false,
     viewportFit: 'cover',
   },
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
