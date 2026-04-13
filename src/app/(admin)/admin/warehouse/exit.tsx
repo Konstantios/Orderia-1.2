@@ -215,10 +215,10 @@ export function AdminWarehouseExit({ products, stock, onSync }: { products: Prod
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" autoPlay playsInline muted />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             {/* Ambient Darkening Overlay */}
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
+            <div className="absolute inset-0 bg-black/50"></div>
             
             {/* Futuristic Scanning HUD */}
-            <div className="relative w-11/12 max-w-sm aspect-square bg-white/5 backdrop-blur-[2px] rounded-3xl border border-white/10 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
+            <div className="relative w-11/12 max-w-sm aspect-square bg-transparent rounded-3xl border border-white/20 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
                 {/* Moving Laser Line */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
                 
