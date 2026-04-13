@@ -187,14 +187,16 @@ export default function DashboardPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {criticalItems.slice(0, 3).map(item => (
-                      <Card key={item.productId} className="bg-destructive/10 border-destructive/20 p-3 flex flex-col gap-1">
+                      <Card key={item.productId} className="bg-destructive/15 border-destructive/30 p-4 flex flex-col gap-2 transition-all hover:bg-destructive/20">
                           <div className="flex justify-between items-start">
                               <p className="font-bold text-sm truncate pr-2">{item.name}</p>
-                              <span className="text-[10px] bg-destructive text-white px-1.5 py-0.5 rounded-full font-bold">CRITICAL</span>
+                              <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black tracking-wider">CRITICAL</span>
                           </div>
-                          <p className="text-xs text-muted-foreground">Απόθεμα: <span className="text-destructive font-bold">{item.current}</span> / {item.ideal}</p>
-                          <Link href="/orders/new?suggested=true" className="text-[10px] text-destructive flex items-center gap-1 mt-1 font-bold hover:underline">
-                              ΠΑΡΑΓΓΕΛΙΑ <ArrowRight className="h-3 w-3" />
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            Απόθεμα: <span className="text-red-500 font-black text-sm">{item.current}</span> / <span className="font-medium text-foreground">{item.ideal}</span>
+                          </p>
+                          <Link href="/orders/new?suggested=true" className="text-xs text-red-400 flex items-center gap-1.5 mt-2 font-black hover:text-red-300 transition-colors group">
+                              ΠΑΡΑΓΓΕΛΙΑ <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                           </Link>
                       </Card>
                   ))}

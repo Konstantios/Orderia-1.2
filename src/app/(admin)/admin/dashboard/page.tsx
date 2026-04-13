@@ -431,12 +431,6 @@ export default function AdminDashboardPage() {
     .sort((a,b) => (a.currentStock/a.idealStock) - (b.currentStock/b.idealStock));
   }, [stock, realProducts]);
 
-  const handleRoleChange = (role: string) => {
-    if (role === 'store') {
-      router.push('/');
-    }
-  };
-
   const openNoteDialog = (note: PostItNote | null) => {
     setEditingNote(note);
     setIsNoteDialogOpen(true);
@@ -479,14 +473,6 @@ export default function AdminDashboardPage() {
     <>
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold md:text-2xl">Πίνακας Ελέγχου</h1>
-         <div className="flex justify-center">
-            <Tabs defaultValue="supplier" onValueChange={handleRoleChange} className="w-full max-w-sm">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="store">Κατάστημα</TabsTrigger>
-                    <TabsTrigger value="supplier">Προμηθευτής</TabsTrigger>
-                </TabsList>
-            </Tabs>
-      </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Left Column */}
@@ -531,10 +517,10 @@ export default function AdminDashboardPage() {
                                         {item.name}
                                     </AccordionTrigger>
                                     <AccordionContent className="pt-0 pb-3 text-sm text-muted-foreground space-y-1">
-                                        <div className="flex justify-between"><span>Κωδικός:</span> <span>{item.code}</span></div>
-                                        <div className="flex justify-between"><span>Απόθεμα:</span> <span className="font-bold text-destructive">{item.currentStock}</span></div>
-                                        <div className="flex justify-between"><span>Ιδανικό:</span> <span>{item.idealStock}</span></div>
-                                        <div className="flex justify-between"><span>Πρόταση:</span> <span className="font-bold text-accent">+{item.suggestion}</span></div>
+                                        <div className="flex justify-between"><span>Κωδικός:</span> <span className="font-medium text-foreground">{item.code}</span></div>
+                                        <div className="flex justify-between"><span>Απόθεμα:</span> <span className="font-black text-red-500">{item.currentStock}</span></div>
+                                        <div className="flex justify-between"><span>Ιδανικό:</span> <span className="font-medium text-foreground">{item.idealStock}</span></div>
+                                        <div className="flex justify-between"><span>Πρόταση:</span> <span className="font-black text-sky-400">+{item.suggestion}</span></div>
                                     </AccordionContent>
                                 </AccordionItem>
                             ))}

@@ -9,10 +9,12 @@ import { Icons } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Bell, RefreshCw } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { useFirebase } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { useState, useEffect } from 'react';
+import { useFirebase, initializeFirebase } from '@/firebase';
+import { collection, query, where, getDocs, onSnapshot, orderBy, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getToken, onMessage } from 'firebase/messaging';
+import { useState, useEffect, useRef } from 'react';
 import { PullToRefresh } from '@/components/ui/pull-to-refresh';
+import { useToast } from '@/hooks/use-toast';
 
 const navItems = [
   { href: '/dashboard', label: 'Αρχική', icon: Icons.dashboard },
@@ -26,11 +28,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, firestore } = useFirebase();
   const [storeName, setStoreName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [indexErrorLink, setIndexErrorLink] = useState<string | null>(null);
   const [scrollContainerRef] = useState(() => ({ current: null as HTMLDivElement | null }));
+  const { toast } = useToast();
+  const lastNotifId = useRef<string | null>(null);
 
   useEffect(() => {
     if (user && firestore) {
-      const getStoreName = async () => {
+      const getStoreData = async () => {
         const storesRef = collection(firestore, 'stores');
         const qStoreManager = query(storesRef, where("managerUids", "array-contains", user.uid));
         const qStoreOwner = query(storesRef, where("ownerId", "==", user.uid));
@@ -40,15 +47,121 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           getDocs(qStoreOwner)
         ]);
 
+        let data = null;
         if (!storeOwnerSnap.empty) {
-            setStoreName(storeOwnerSnap.docs[0].data().businessName || 'Το Κατάστημά μου');
+            data = storeOwnerSnap.docs[0].data();
         } else if (!storeManagerSnap.empty) {
-            setStoreName(storeManagerSnap.docs[0].data().businessName || 'Το Κατάστημά μου');
+            data = storeManagerSnap.docs[0].data();
+        }
+
+        if (data) {
+            setStoreName(data.businessName || 'Το Κατάστημά μου');
+            setLogoUrl(data.logoUrl || '');
         }
       };
-      getStoreName();
+      getStoreData();
     }
   }, [user, firestore]);
+
+  // Real-time notifications listener
+  useEffect(() => {
+    if (!user || !firestore) return;
+
+    const notifQuery = query(
+      collection(firestore, 'notifications'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(notifQuery, (snapshot) => {
+      console.log("[DEBUG] Notification snapshot received. Docs:", snapshot.docs.length);
+      const docs = snapshot.docs;
+      const unread = docs.filter(d => !d.data().read).length;
+      setUnreadCount(unread);
+
+      // Show toast for the newest notification if it's new
+      if (docs.length > 0) {
+        const newest = docs[0];
+        const data = newest.data();
+        if (lastNotifId.current !== newest.id && !data.read) {
+          lastNotifId.current = newest.id;
+          
+          // Only show toast if it was created recently (to avoid toast storm on first load)
+          const createdAt = data.createdAt?.toDate?.() || (data.date ? new Date(data.date) : new Date());
+          if (new Date().getTime() - createdAt.getTime() < 60000) {
+            toast({
+              title: data.title,
+              description: data.description,
+              action: (
+                <Link href="/notifications" className="bg-primary text-primary-foreground px-3 py-1 rounded-md text-sm font-medium">
+                  Προβολή
+                </Link>
+              ),
+            });
+          }
+        }
+      }
+    }, (error: any) => {
+        console.error('[CRITICAL DEBUG] Notification listener error:', error.code, error.message);
+        const message = error.message || '';
+        const linkMatch = message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+        if (linkMatch) {
+            setIndexErrorLink(linkMatch[0]);
+        }
+    });
+
+    return () => unsubscribe();
+  }, [user, firestore, toast]);
+
+  // Handle FCM Token Registration
+  useEffect(() => {
+    if (!user || !firestore || typeof window === 'undefined') return;
+
+    const setupMessaging = async () => {
+        try {
+            const { messaging } = initializeFirebase();
+            if (!messaging) return;
+
+            // Request permission
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                console.log('[DEBUG] Notification permission denied');
+                return;
+            }
+
+            // Get token
+            const token = await getToken(messaging, {
+                vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
+            });
+
+            if (token) {
+                console.log('[DEBUG] FCM Token generated:', token);
+                // Save token to Firestore
+                await setDoc(doc(firestore, 'fcmTokens', token), {
+                    token,
+                    userId: user.uid,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            }
+        } catch (error) {
+            console.error('[DEBUG] Error setting up messaging:', error);
+        }
+    };
+
+    setupMessaging();
+
+    // Listen for foreground messages
+    const { messaging } = initializeFirebase();
+    if (messaging) {
+        const unsubscribe = onMessage(messaging, (payload) => {
+            console.log('[DEBUG] Foreground message received:', payload);
+            toast({
+                title: payload.notification?.title || 'Νέα ειδοποίηση',
+                description: payload.notification?.body || '',
+            });
+        });
+        return () => unsubscribe();
+    }
+  }, [user, firestore, toast]);
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
@@ -61,16 +174,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Bell className="h-5 w-5 text-primary" />
-            <span className="sr-only">Εναλλαγή ειδοποιήσεων</span>
-          </Button>
+          <Link href="/notifications">
+            <Button variant="ghost" size="icon" className="rounded-full relative">
+              <Bell className="h-5 w-5 text-primary" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+              )}
+              <span className="sr-only">Εναλλαγή ειδοποιήσεων</span>
+            </Button>
+          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-9 w-9 border-2 border-primary/50">
-                  <AvatarImage src="https://picsum.photos/seed/avatar/100/100" alt="Avatar" data-ai-hint="bakery owner" />
-                  <AvatarFallback>FG</AvatarFallback>
+                  <AvatarImage src={logoUrl || "https://picsum.photos/seed/avatar/100/100"} alt="Logo" className="object-cover" />
+                  <AvatarFallback>{storeName?.substring(0, 2).toUpperCase() || 'ST'}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -100,6 +218,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <PullToRefresh rootRef={scrollContainerRef}>
           <div className="pb-[calc(2rem+env(safe-area-inset-bottom))]">
+            {indexErrorLink && (
+                <Card className="mb-4 border-red-500 bg-red-500/10 mx-1">
+                    <CardHeader className="p-3 pb-2">
+                        <div className="flex items-center gap-2 text-red-600">
+                            <Bell className="h-4 w-4" />
+                            <CardTitle className="text-xs font-bold uppercase tracking-tight">Database Index Missing</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                        <p className="text-[11px] text-red-600/90 mb-3 leading-tight font-medium">
+                            Οι ειδοποιήσεις δεν μπορούν να φορτώσουν. Παρακαλούμε πατήστε το παρακάτω κουμπί για να το διορθώσετε.
+                        </p>
+                        <Button 
+                            className="w-full h-9 bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+                            onClick={() => window.open(indexErrorLink, '_blank')}
+                        >
+                            Δημιουργία Index
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
             {children}
           </div>
         </PullToRefresh>

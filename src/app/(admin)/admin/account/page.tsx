@@ -14,8 +14,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Info } from 'lucide-react';
+import { Loader2, Save, Info, Building } from 'lucide-react';
 import type { Wholesaler } from '@/lib/types';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 const formSchema = z.object({
     // Business details
@@ -123,6 +124,7 @@ export default function AdminAccountPage() {
                 description: data.description,
                 orderAcceptanceHours: data.orderAcceptanceHours,
                 ownerName: data.userName,
+                logoUrl: wholesaler.logoUrl,
             });
 
             // Update Firebase Auth user profile
@@ -165,6 +167,15 @@ export default function AdminAccountPage() {
                         <CardDescription>Διαχειριστείτε τις πληροφορίες που βλέπουν οι πελάτες σας.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                         <div className="flex flex-col items-center sm:items-start mb-4">
+                            <Label className="mb-2">Λογότυπο Επιχείρησης</Label>
+                            <ImageUpload 
+                                value={wholesaler.logoUrl} 
+                                onUpload={(url) => setWholesaler(prev => prev ? { ...prev, logoUrl: url } : null)}
+                                path="logos/wholesalers"
+                                fallbackIcon={<Building className="h-10 w-10 text-muted-foreground" />}
+                            />
+                         </div>
                          <div className="grid sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="companyName">Επωνυμία Εταιρείας</Label>

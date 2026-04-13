@@ -35,6 +35,7 @@ export interface Store {
     deliveryDay: string;
     ownerId?: string;
     managerUids?: string[];
+    logoUrl?: string;
 }
 
 export interface SupplierStoreConnection {
@@ -55,6 +56,7 @@ export interface Wholesaler {
     adminUids: string[];
     taxId: string;
     description?: string;
+    logoUrl?: string;
 }
 
 export interface CustomerInventoryItem {
@@ -143,6 +145,11 @@ export interface Notification {
   description: string;
   date: string;
   read: boolean;
+  recipientUid: string;
+  wholesalerId: string;
+  wholesalerName: string;
+  type: 'order_reminder' | 'system';
+  createdAt: any;
 }
 
 export interface JoinRequest {

@@ -185,6 +185,8 @@ export default function AdminCustomersPage() {
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [parsedCustomers, setParsedCustomers] = useState<Array<{ businessName: string; ownerName: string; phone: string; deliveryDay: string }>>([]);
     const [isImporting, setIsImporting] = useState(false);
+    const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+    const [indexErrorLink, setIndexErrorLink] = useState<string | null>(null);
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -457,6 +459,104 @@ export default function AdminCustomersPage() {
             setIsImporting(false);
         }
     };
+
+    const handleSendDeliveryNotification = async () => {
+        if (!firestore || !wholesaler || activeTab === 'all') return;
+        
+        const dayCustomers = customers.filter(c => c.deliveryDay === activeTab);
+        if (dayCustomers.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Κενή Λίστα',
+                description: `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
+            });
+            return;
+        }
+
+        setIsSendingNotifications(true);
+
+        try {
+            const batch = writeBatch(firestore);
+            let totalNotifications = 0;
+
+            console.log("[DEBUG] Starting notification batch for day:", activeTab);
+
+            for (const store of dayCustomers) {
+                const recipientUids = new Set<string>();
+                if (store.ownerId) recipientUids.add(store.ownerId);
+                if (store.managerUids) {
+                    store.managerUids.forEach(uid => recipientUids.add(uid));
+                }
+
+                recipientUids.forEach(uid => {
+                    const notifRef = doc(collection(firestore, 'notifications'));
+                    const title = 'Υπενθύμιση Παραγγελίας';
+                    const description = `Παρακαλούμε καταχωρήστε την παραγγελία σας για την επόμενη παράδοση (${activeTab}) από: ${wholesaler.companyName}.`;
+                    
+                    const notifData = {
+                        title,
+                        description,
+                        date: new Date().toISOString(),
+                        read: false,
+                        recipientUid: uid,
+                        wholesalerId: wholesaler.id,
+                        wholesalerName: wholesaler.companyName,
+                        type: 'order_reminder',
+                        createdAt: serverTimestamp()
+                    };
+                    console.log("[DEBUG] Adding notification to batch:", notifData);
+                    batch.set(notifRef, notifData);
+                    totalNotifications++;
+
+                    // Trigger real push notification via our new API
+                    fetch('/api/notifications/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            recipientUid: uid,
+                            title,
+                            body: description
+                        })
+                    }).catch(e => console.error('[DEBUG] Push notification trigger failed for', uid, e));
+                });
+            }
+
+            if (totalNotifications > 0) {
+                console.log("[DEBUG] Committing batch for", totalNotifications, "notifications...");
+                await batch.commit();
+                console.log("[DEBUG] Batch commit successful!");
+                toast({
+                    title: 'Επιτυχία!',
+                    description: `Στάλθηκαν ${totalNotifications} ειδοποιήσεις υπενθύμισης για την ${activeTab}.`
+                });
+            } else {
+                 toast({
+                    variant: 'destructive',
+                    title: 'Προσοχή',
+                    description: 'Δεν βρέθηκαν εγγεγραμμένοι χρήστες για τους πελάτες αυτής της ημέρας.'
+                });
+            }
+        } catch (error: any) {
+            console.error('[CRITICAL DEBUG] Error sending notifications:', error);
+            
+            // Check for index creation link in the error message
+            const message = error.message || '';
+            const linkMatch = message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+            if (linkMatch) {
+                setIndexErrorLink(linkMatch[0]);
+            }
+
+            toast({
+                variant: 'destructive',
+                title: 'Σφάλμα',
+                description: linkMatch 
+                    ? 'Απαιτείται δημιουργία ευρετηρίου (Index) για αυτή τη λειτουργία.' 
+                    : 'Αποτυχία αποστολής ειδοποιήσεων.'
+            });
+        } finally {
+            setIsSendingNotifications(false);
+        }
+    };
     
     const handleDeleteCustomer = async (customerId: string) => {
         if (!firestore || !wholesaler) return;
@@ -639,6 +739,51 @@ export default function AdminCustomersPage() {
                                Εξαγωγή {activeTab === 'all' ? 'Όλων των Πελατών' : activeTab}
                            </Button>
                        </div>
+
+                       {activeTab !== 'all' && (
+                            <div className="mb-6 animate-in fade-in slide-in-from-top-2">
+                                <Button 
+                                    className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-lg shadow-amber-500/20 gap-2 border-none transition-all active:scale-95"
+                                    onClick={handleSendDeliveryNotification}
+                                    disabled={isSendingNotifications || combinedLoading}
+                                >
+                                    {isSendingNotifications ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                        <Bell className="h-5 w-5" />
+                                    )}
+                                    Στείλε ειδοποίηση για Παραγγελία ({activeTab})
+                                </Button>
+                                <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                                    Θα σταλεί άμεση ειδοποίηση σε όλους τους εγγεγραμμένους χρήστες των καταστημάτων της {activeTab}.
+                                </p>
+                            </div>
+                       )}
+
+                       {indexErrorLink && (
+                            <Card className="mb-6 border-red-500 bg-red-500/10 animate-in zoom-in-95">
+                                <CardHeader className="pb-2">
+                                    <div className="flex items-center gap-2 text-red-600">
+                                        <Bell className="h-5 w-5" />
+                                        <CardTitle className="text-sm font-bold">Απαιτείται Ρύθμιση Βάσης Δεδομένων</CardTitle>
+                                    </div>
+                                    <CardDescription className="text-red-600/80">
+                                        Για να λειτουργήσουν οι ειδοποιήσεις, πρέπει να δημιουργήσετε ένα ευρετήριο (Index) στο Firebase.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Button 
+                                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold"
+                                        onClick={() => window.open(indexErrorLink, '_blank')}
+                                    >
+                                        Δημιουργία Index Τώρα
+                                    </Button>
+                                    <p className="text-[10px] mt-2 text-center opacity-70">
+                                        Το link περιέχει όλες τις απαραίτητες παραμέτρους αυτόματα.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                       )}
 
                        <Table>
                             <TableHeader>

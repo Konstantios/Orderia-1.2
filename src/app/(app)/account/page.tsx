@@ -13,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Store as StoreIcon } from 'lucide-react';
 import type { Store } from '@/lib/types';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 
 const formSchema = z.object({
@@ -124,6 +125,7 @@ export default function AccountPage() {
                 city: data.city,
                 deliveryDay: data.deliveryDay,
                 ownerName: data.userName,
+                logoUrl: store.logoUrl,
             });
 
             // Update Firebase Auth user profile
@@ -170,6 +172,15 @@ export default function AccountPage() {
                         <CardDescription>Οι πληροφορίες αυτές χρησιμοποιούνται για την ταυτοποίησή σας από τους προμηθευτές.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6 pt-6">
+                         <div className="flex flex-col items-center sm:items-start mb-4">
+                            <Label className="mb-2">Λογότυπο Επιχείρησης</Label>
+                            <ImageUpload 
+                                value={store.logoUrl} 
+                                onUpload={(url) => setStore(prev => prev ? { ...prev, logoUrl: url } : null)}
+                                path="logos/stores"
+                                fallbackIcon={<StoreIcon className="h-10 w-10 text-muted-foreground" />}
+                            />
+                         </div>
                          <div className="grid sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <Label htmlFor="businessName">Επωνυμία Καταστήματος</Label>

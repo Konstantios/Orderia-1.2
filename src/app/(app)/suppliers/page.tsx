@@ -214,22 +214,40 @@ export default function SuppliersPage() {
         }
     }
 
-    const [store, setStore] = useState<any>(null);
+    const [stores, setStores] = useState<any[]>([]);
     useEffect(() => {
         if (!firestore || !user) return;
-        const findStore = async () => {
+        const findStores = async () => {
              const storesRef = collection(firestore, 'stores');
-             const q = query(storesRef, where("managerUids", "array-contains", user.uid), limit(1));
-             const snap = await getDocs(q);
-             if (!snap.empty) setStore({ id: snap.docs[0].id, ...snap.docs[0].data() });
+             
+             // Get stores where user is owner
+             const qOwner = query(storesRef, where("ownerId", "==", user.uid));
+             const ownerSnap = await getDocs(qOwner);
+             
+             // Get stores where user is manager
+             const qManager = query(storesRef, where("managerUids", "array-contains", user.uid));
+             const managerSnap = await getDocs(qManager);
+             
+             const foundStores = [
+                 ...ownerSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+                 ...managerSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+             ];
+
+             // Remove duplicates based on ID
+             const uniqStores = Array.from(new Map(foundStores.map(s => [s.id, s])).values());
+             setStores(uniqStores);
         };
-        findStore();
+        findStores();
     }, [firestore, user]);
 
     const connectionsQuery = useMemoFirebase(() => {
-        if (!firestore || !store) return null;
-        return query(collection(firestore, 'supplierStoreConnections'), where('storeId', '==', store.id), where('isActive', '==', true));
-    }, [firestore, store]);
+        if (!firestore || stores.length === 0) return null;
+        const storeIds = stores.map(s => s.id);
+        return query(
+            collection(firestore, 'supplierStoreConnections'), 
+            where('storeId', 'in', storeIds)
+        );
+    }, [firestore, stores]);
     const { data: connections, isLoading: isLoadingConnections } = useCollection<WithId<any>>(connectionsQuery);
 
     return (

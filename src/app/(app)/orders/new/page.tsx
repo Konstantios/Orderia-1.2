@@ -504,14 +504,14 @@ function NewOrderPageContent() {
                       const { currentStock, idealStock, suggestion, ratio: stockRatio } = getStockData(product.id);
 
                       const stockColor = idealStock === 0 ? 'bg-muted text-muted-foreground' 
-                        : stockRatio >= 0.8 ? 'bg-green-500/15 text-green-400' 
-                        : stockRatio >= 0.4 ? 'bg-yellow-500/15 text-yellow-400' 
-                        : 'bg-destructive/15 text-destructive';
+                        : stockRatio >= 0.8 ? 'bg-green-500/20 text-green-400' 
+                        : stockRatio >= 0.4 ? 'bg-yellow-500/20 text-yellow-400' 
+                        : 'bg-red-500/20 text-red-500';
 
                       return (
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className={cn('text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full', stockColor)}>
-                            Απόθ: {currentStock}
+                          <span className={cn('text-[10px] font-black uppercase px-2 py-0.5 rounded-full', stockColor)}>
+                            Αποθ: {currentStock}
                           </span>
                           {idealStock > 0 && (
                             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
