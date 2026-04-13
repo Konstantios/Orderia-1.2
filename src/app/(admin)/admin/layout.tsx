@@ -13,6 +13,7 @@ import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, limit } from 'firebase/firestore';
 import type { Wholesaler } from '@/lib/types';
 import { useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import {
   SidebarProvider,
   Sidebar,
