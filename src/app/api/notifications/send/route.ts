@@ -77,9 +77,11 @@ export async function POST(request: Request) {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         const listData = await listResponse.json();
-        const tokens = (listData.documents || [])
-            .filter((doc: any) => doc.fields.userId?.stringValue === recipientUid)
-            .map((doc: any) => doc.fields.token?.stringValue);
+        const tokens = Array.from(new Set(
+            (listData.documents || [])
+                .filter((doc: any) => doc.fields.userId?.stringValue === recipientUid)
+                .map((doc: any) => doc.fields.token?.stringValue)
+        ));
 
         if (tokens.length === 0) {
             return NextResponse.json({ success: true, message: 'No tokens found for user' });

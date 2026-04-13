@@ -18,20 +18,47 @@ try {
 
     messaging.onBackgroundMessage((payload) => {
         console.log('[SW] Received background message ', payload);
-        const notificationTitle = payload.notification.title || 'Νέα ειδοποίηση';
-        const notificationOptions = {
-            body: payload.notification.body || '',
-            icon: '/favicon.ico'
-        };
-
-        if (self.registration) {
-            self.registration.showNotification(notificationTitle, notificationOptions);
-        }
+        // We no longer call showNotification manually here because the Firebase SDK 
+        // handles the 'notification' object in the payload automatically, 
+        // avoiding duplicate notifications on a single device.
     });
     console.log('[SW] Messaging initialized successfully');
 } catch (error) {
     console.error('[SW] Initialization error:', error);
 }
+
+// Handle notification clicks for navigation
+self.addEventListener('notificationclick', (event) => {
+    console.log('[SW] Notification click received', event.notification.data);
+    event.notification.close();
+
+    // The URL to navigate to is usually passed in the fcm_options.link 
+    // which the SDK handles, but we can also handle it here for maximum compatibility.
+    const urlToOpen = new URL('/orders/new', self.location.origin).href;
+
+    const promiseChain = clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true
+    }).then((windowClients) => {
+        let matchingClient = null;
+
+        for (let i = 0; i < windowClients.length; i++) {
+            const windowClient = windowClients[i];
+            if (windowClient.url === urlToOpen) {
+                matchingClient = windowClient;
+                break;
+            }
+        }
+
+        if (matchingClient) {
+            return matchingClient.focus();
+        } else {
+            return clients.openWindow(urlToOpen);
+        }
+    });
+
+    event.waitUntil(promiseChain);
+});
 
 // Minimal fetch handler to satisfy PWA installation criteria
 self.addEventListener('fetch', (event) => {
