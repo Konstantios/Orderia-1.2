@@ -194,8 +194,8 @@ export default function AdminCustomersPage() {
     const [customNotifTitle, setCustomNotifTitle] = useState('');
     const [customNotifBody, setCustomNotifBody] = useState('');
     const [isSendingCustomNotif, setIsSendingCustomNotif] = useState(false);
-    // Maps recipientUid to an array of acknowledged message titles
-    const [acknowledgedMessages, setAcknowledgedMessages] = useState<Map<string, {id: string, title: string}[]>>(new Map());
+    // Maps recipientUid to an array of acknowledged message info
+    const [acknowledgedMessages, setAcknowledgedMessages] = useState<Map<string, {id: string, title: string, date: any}[]>>(new Map());
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -302,19 +302,22 @@ export default function AdminCustomersPage() {
                     where('type', '==', 'custom_message')
                 );
                 const querySnapshot = await getDocs(q);
-                const results = new Map<string, {id: string, title: string}[]>();
+                const results = new Map<string, {id: string, title: string, date: any}[]>();
                 
                 querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
                     if (data.acknowledgedAt) {
                         const uid = data.recipientUid;
-                        const messageInfo = { id: doc.id, title: data.title };
+                        const messageInfo = { 
+                            id: doc.id, 
+                            title: data.title,
+                            date: data.acknowledgedAt.toDate ? data.acknowledgedAt.toDate() : new Date(data.acknowledgedAt)
+                        };
                         
                         if (!results.has(uid)) {
                             results.set(uid, []);
                         }
                         
-                        // Avoid duplicates for the same message title/id
                         const current = results.get(uid)!;
                         if (!current.find(m => m.id === doc.id)) {
                             current.push(messageInfo);
@@ -957,7 +960,7 @@ export default function AdminCustomersPage() {
                                     .filter(c => activeTab === 'all' || c.deliveryDay === activeTab)
                                     .map((customer) => {
                                         const getCustomerMessages = () => {
-                                            const messages: {id: string, title: string}[] = [];
+                                            const messages: {id: string, title: string, date: any}[] = [];
                                             const uids = [customer.ownerId, ...(customer.managerUids || [])].filter(Boolean) as string[];
                                             
                                             uids.forEach(uid => {
@@ -968,7 +971,11 @@ export default function AdminCustomersPage() {
                                                     }
                                                 });
                                             });
-                                            return messages;
+
+                                            // Sort by date descending and take top 5
+                                            return messages
+                                                .sort((a, b) => b.date.getTime() - a.date.getTime())
+                                                .slice(0, 5);
                                         };
 
                                         const acknowledgedList = getCustomerMessages();
