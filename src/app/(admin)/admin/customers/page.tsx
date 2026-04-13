@@ -194,6 +194,7 @@ export default function AdminCustomersPage() {
     const [customNotifTitle, setCustomNotifTitle] = useState('');
     const [customNotifBody, setCustomNotifBody] = useState('');
     const [isSendingCustomNotif, setIsSendingCustomNotif] = useState(false);
+    const [acknowledgedUids, setAcknowledgedUids] = useState<Set<string>>(new Set());
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -285,6 +286,39 @@ export default function AdminCustomersPage() {
 
         fetchAndSetCustomers();
     }, [connections, isLoadingConnections, firestore, connectionsError, toast]);
+
+    // Fetch recent acknowledgements
+    useEffect(() => {
+        if (!firestore || !wholesaler) return;
+
+        const fetchAcknowledgements = async () => {
+            try {
+                // Get all custom_message notifications for this wholesaler that are acknowledged
+                // Note: In production a time limit (e.g. last 48h) would be better
+                const q = query(
+                    collection(firestore, 'notifications'), 
+                    where('wholesalerId', '==', wholesaler.id),
+                    where('type', '==', 'custom_message')
+                );
+                const querySnapshot = await getDocs(q);
+                const uids = new Set<string>();
+                querySnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (data.acknowledgedAt) {
+                        uids.add(data.recipientUid);
+                    }
+                });
+                setAcknowledgedUids(uids);
+            } catch (e) {
+                console.error("Error fetching acknowledgements:", e);
+            }
+        };
+
+        fetchAcknowledgements();
+        // Poll every 30 seconds for real-time-ish updates if needed
+        const interval = setInterval(fetchAcknowledgements, 30000);
+        return () => clearInterval(interval);
+    }, [firestore, wholesaler]);
 
     const handleApproveRequest = async (request: WithId<JoinRequest>) => {
         if (!firestore || !wholesaler) return;
@@ -908,47 +942,71 @@ export default function AdminCustomersPage() {
                                 )}
                                 {!combinedLoading && customers
                                     .filter(c => activeTab === 'all' || c.deliveryDay === activeTab)
-                                    .map((customer) => (
-                                    <TableRow 
-                                        key={customer.id} 
-                                        className="cursor-pointer hover:bg-muted/50"
-                                        onClick={(e) => {
-                                            if ((e.target as HTMLElement).closest('button')) return;
-                                            router.push(`/admin/customers/${customer.id}`);
-                                        }}
-                                    >
-                                        <TableCell className="font-medium">
-                                            <div className="flex flex-col">
-                                                <span>{customer.businessName}</span>
-                                                <span className="sm:hidden text-xs text-muted-foreground">{customer.phone}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>{customer.ownerName}</TableCell>
-                                        <TableCell className="hidden sm:table-cell text-muted-foreground">{customer.phone}</TableCell>
-                                        <TableCell className="hidden md:table-cell">
-                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
-                                                {customer.deliveryDay}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                             <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => openDialogForEdit(customer)}>
-                                                        Επεξεργασία
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteCustomer(customer.id)}>
-                                                        Διαγραφή
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                    .map((customer) => {
+                                        const isAcknowledged = (customer.ownerId && acknowledgedUids.has(customer.ownerId)) || 
+                                                              (customer.managerUids || []).some(uid => acknowledgedUids.has(uid));
+
+                                        return (
+                                            <TableRow 
+                                                key={customer.id} 
+                                                className="cursor-pointer hover:bg-muted/50"
+                                                onClick={(e) => {
+                                                    if ((e.target as HTMLElement).closest('button')) return;
+                                                    router.push(`/admin/customers/${customer.id}`);
+                                                }}
+                                            >
+                                                <TableCell className="font-medium">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{customer.businessName}</span>
+                                                            {isAcknowledged && (
+                                                                <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 py-0 px-1.5 text-[9px] font-bold h-5 uppercase">
+                                                                    <Check className="h-3 w-3" />
+                                                                    Ενημερώθηκε
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <span className="sm:hidden text-xs text-muted-foreground">{customer.phone}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>{customer.ownerName}</TableCell>
+                                                <TableCell className="hidden sm:table-cell text-muted-foreground">{customer.phone}</TableCell>
+                                                <TableCell className="hidden md:table-cell">
+                                                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
+                                                        {customer.deliveryDay}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted font-bold">
+                                                                <span className="sr-only">Open menu</span>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="rounded-xl">
+                                                            <DropdownMenuItem className="cursor-pointer font-bold" onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openDialogForEdit(customer);
+                                                            }}>
+                                                                Επεξεργασία
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem 
+                                                                className="text-destructive cursor-pointer font-bold"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteCustomer(customer.id);
+                                                                }}
+                                                            >
+                                                                Διαγραφή
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                }
                                 {!combinedLoading && customers.filter(c => activeTab === 'all' || c.deliveryDay === activeTab).length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">

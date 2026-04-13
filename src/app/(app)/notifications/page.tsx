@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFirebase, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, orderBy, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ export default function NotificationsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [isAcknowledging, setIsAcknowledging] = useState<string | null>(null);
 
   const notificationsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -57,6 +58,75 @@ export default function NotificationsPage() {
       toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Αποτυχία ενημέρωσης ειδοποιήσεων.' });
     } finally {
       setIsMarkingAll(false);
+    }
+  };
+  
+  const handleAcknowledge = async (notification: Notification & { id: string }) => {
+    if (!firestore || !user) return;
+    setIsAcknowledging(notification.id);
+    try {
+      // 1. Mark as acknowledged on the notification itself
+      await updateDocumentNonBlocking(doc(firestore, 'notifications', notification.id), { 
+        acknowledgedAt: serverTimestamp(),
+        read: true 
+      });
+
+      // 2. Fetch Wholesaler to get admin team UIDs
+      const wholesalerRef = doc(firestore, 'wholesalers', notification.wholesalerId);
+      const wholesalerSnap = await getDoc(wholesalerRef);
+      
+      if (wholesalerSnap.exists()) {
+        const wholesalerData = wholesalerSnap.data();
+        const adminUids = wholesalerData.adminUids || [];
+        const ownerId = wholesalerData.ownerId;
+        
+        const recipientUids = new Set<string>();
+        if (ownerId) recipientUids.add(ownerId);
+        adminUids.forEach((uid: string) => recipientUids.add(uid));
+
+        // 3. Send notification to wholesaler admins
+        const batch = writeBatch(firestore);
+        const title = 'Επιβεβαίωση Ανάγνωσης';
+        // Need to find store name - we can assume user.displayName or fetch from stores
+        const description = `Ο πελάτης επιβεβαίωσε ότι ενημερώθηκε για το μήνυμα: "${notification.title}"`;
+        
+        recipientUids.forEach(uid => {
+          const notifRef = doc(collection(firestore, 'notifications'));
+          batch.set(notifRef, {
+            title,
+            description,
+            date: new Date().toISOString(),
+            read: false,
+            recipientUid: uid,
+            wholesalerId: notification.wholesalerId,
+            wholesalerName: notification.wholesalerName,
+            type: 'acknowledgement_received',
+            createdAt: serverTimestamp(),
+            fromStoreId: '', // Ideally we'd have this
+            fromUserId: user.uid
+          });
+
+          // Trigger push notification to admin
+          fetch('/api/notifications/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipientUid: uid,
+              title,
+              body: description
+            })
+          }).catch(e => console.error('Push notification failed', e));
+        });
+        
+        await batch.commit();
+      }
+
+      toast({ title: 'Ευχαριστούμε!', description: 'Η ενημέρωση στάλθηκε στον προμηθευτή.' });
+    } catch (error) {
+      console.error('Error acknowledging notification:', error);
+      toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Αποτυχία επιβεβαίωσης.' });
+    } finally {
+      setIsAcknowledging(null);
     }
   };
 
@@ -143,14 +213,44 @@ export default function NotificationsPage() {
                         </span>
                       </div>
                       {!notification.read && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary transition-colors"
-                            onClick={() => handleMarkAsRead(notification.id)}
-                        >
-                          Σημείωση ως αναγνωσμένο
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            {notification.type === 'custom_message' && !(notification as any).acknowledgedAt && (
+                                <Button 
+                                    variant="default" 
+                                    size="sm" 
+                                    className="h-8 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm gap-2"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAcknowledge(notification as any);
+                                    }}
+                                    disabled={isAcknowledging === notification.id}
+                                >
+                                    {isAcknowledging === notification.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <CheckCheck className="h-4 w-4" />
+                                    )}
+                                    Ενημερώθηκα
+                                </Button>
+                            )}
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMarkAsRead(notification.id);
+                                }}
+                            >
+                                Σημείωση ως αναγνωσμένο
+                            </Button>
+                        </div>
+                      )}
+                      {(notification as any).acknowledgedAt && (
+                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1.5 py-1 px-3">
+                              <CheckCheck className="h-3 w-3" />
+                              Ενημερώθηκα
+                          </Badge>
                       )}
                     </div>
                   </div>
