@@ -989,10 +989,14 @@ export default function AdminCustomersPage() {
                                                         {acknowledgedList.length > 0 && (
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {acknowledgedList.map((msg) => (
-                                                                    <Badge key={msg.id} variant="outline" className="text-green-700 border-green-200 bg-green-50/50 gap-1 py-0.5 px-2 text-[10px] font-medium transition-all hover:bg-green-100/50">
-                                                                        <Check className="h-3 w-3 text-green-600" />
-                                                                        <span className="opacity-70 mr-1 italic">Ενημερώθηκε για:</span>
-                                                                        <span className="font-bold uppercase">{msg.title}</span>
+                                                                    <Badge 
+                                                                        key={msg.id} 
+                                                                        variant="outline" 
+                                                                        className="bg-emerald-500/15 border-emerald-500/40 text-emerald-400 gap-1.5 py-1 px-2.5 text-[10px] font-bold transition-all hover:bg-emerald-500/25 shadow-sm"
+                                                                    >
+                                                                        <Check className="h-3 w-3 stroke-[3px]" />
+                                                                        <span className="opacity-90 tracking-tight">ΕΝΗΜΕΡΩΘΗΚΕ:</span>
+                                                                        <span className="text-white drop-shadow-sm">{msg.title}</span>
                                                                     </Badge>
                                                                 ))}
                                                             </div>
