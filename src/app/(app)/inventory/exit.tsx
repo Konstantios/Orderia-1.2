@@ -65,7 +65,7 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const detectionIntervalRef = useRef<NodeJS.Timeout>();
+  const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const warehouseBg = PlaceHolderImages.find(img => img.id === 'warehouse-background');
 
@@ -74,12 +74,14 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
     setScannedItems({});
   };
 
-  const inventoryData = useMemo(() => customer.products.map(cp => {
-    const product = products.find(p => p.id === cp.productId)!;
-    const idealStock = cp.idealStock;
-    const currentStock = inventory.find(i => i.productId === cp.productId)?.currentStock || 0;
+  const inventoryData = useMemo(() => products.map(product => {
+    const invDoc = inventory.find(i => i.id === product.id);
+    const invField = inventory.find(i => i.productId === product.id);
+    const inv = invDoc || invField;
+    const currentStock = inv?.currentStock || 0;
+    const idealStock = 0;
     return { product, idealStock, currentStock };
-  }), [customer.products, products, inventory]);
+  }), [products, inventory]);
 
   const handleConfirmScan = () => {
     if (!productForConfirmation) return;

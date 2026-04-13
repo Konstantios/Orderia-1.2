@@ -2,11 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
-import { Bell, LogOut, Settings } from 'lucide-react';
+import { Bell, LogOut, Settings, RefreshCw } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { PullToRefresh } from '@/components/ui/pull-to-refresh';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, limit } from 'firebase/firestore';
+import type { Wholesaler } from '@/lib/types';
 import {
   SidebarProvider,
   Sidebar,
@@ -22,6 +27,7 @@ import {
 const navItems = [
   { href: '/admin/dashboard', label: 'Πίνακας Ελέγχου', icon: Icons.dashboard },
   { href: '/admin/orders', label: 'Παραγγελίες', icon: Icons.newOrder },
+  { href: '/admin/orders/history', label: 'Ιστορικό', icon: Icons.history },
   { href: '/admin/customers', label: 'Πελάτες', icon: Icons.customers },
   { href: '/admin/products', label: 'Προϊόντα', icon: Icons.inventory },
   { href: '/admin/warehouse', label: 'Αποθήκη', icon: Icons.warehouse },
@@ -31,10 +37,20 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, firestore } = useFirebase();
+
+  const [scrollContainerRef] = useState(() => ({ current: null as HTMLElement | null }));
+
+  const wholesalerQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'wholesalers'), where('adminUids', 'array-contains', user.uid), limit(1));
+  }, [user, firestore]);
+  const { data: wholesalers } = useCollection<Wholesaler>(wholesalerQuery);
+  const wholesaler = wholesalers?.[0];
 
   return (
-    <SidebarProvider>
-        <Sidebar collapsible="icon" className="border-r bg-muted/40">
+    <SidebarProvider className="h-[100dvh] overflow-hidden">
+        <Sidebar collapsible="icon" className="border-r bg-muted/40 h-full">
             <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
                 <Link href="/" className="flex items-center gap-2 font-semibold">
                     <Logo className="h-8 w-8" />
@@ -64,8 +80,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <SidebarFooter className="mt-auto border-t p-4">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Ρυθμίσεις">
-                            <Link href="#">
+                        <SidebarMenuButton asChild tooltip="Ρυθμίσεις" isActive={pathname === '/admin/account'}>
+                            <Link href="/admin/account">
                                 <Settings />
                                 <span>Ρυθμίσεις</span>
                             </Link>
@@ -79,25 +95,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton 
+                            tooltip="Ανανέωση Εφαρμογής" 
+                            onClick={() => window.location.reload()}
+                            className="text-primary hover:text-primary"
+                        >
+                            <RefreshCw />
+                            <span className="font-bold">Ανανέωση Εφαρμογής</span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarFooter>
         </Sidebar>
-        <SidebarInset>
-            <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+        <SidebarInset className="flex flex-col h-full overflow-hidden">
+            <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
                 <SidebarTrigger className="shrink-0"/>
                 <div className="w-full flex-1">
-                     {/* Search bar can go here */}
+                     {wholesaler && (
+                        <span className="font-headline text-lg font-semibold text-foreground">
+                            {wholesaler.companyName}
+                        </span>
+                     )}
                 </div>
                 <Button variant="ghost" size="icon" className="rounded-full">
                     <Bell className="h-5 w-5" />
                 </Button>
                 <Avatar>
-                    <AvatarImage src="https://picsum.photos/seed/admin/100/100" data-ai-hint="company manager" />
-                    <AvatarFallback>AD</AvatarFallback>
+                    <AvatarImage src={wholesaler?.logoUrl || "https://picsum.photos/seed/admin/100/100"} data-ai-hint="company manager" />
+                    <AvatarFallback>{wholesaler?.companyName?.substring(0, 2).toUpperCase() || 'AD'}</AvatarFallback>
                 </Avatar>
             </header>
-            <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-                {children}
+            <main 
+                ref={scrollContainerRef as any}
+                className="flex-1 overflow-y-auto p-4 lg:gap-6 lg:p-6"
+            >
+                <PullToRefresh rootRef={scrollContainerRef as any}>
+                    {children}
+                </PullToRefresh>
             </main>
         </SidebarInset>
     </SidebarProvider>

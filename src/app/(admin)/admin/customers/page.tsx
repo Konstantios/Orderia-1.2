@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MoreHorizontal, PlusCircle, Loader2 } from 'lucide-react';
-import type { Store, Wholesaler, SupplierStoreConnection } from '@/lib/types';
+import { MoreHorizontal, PlusCircle, Loader2, CheckCircle2, XCircle, Bell, FileSpreadsheet, Check, Download } from 'lucide-react';
+import type { Store, Wholesaler, SupplierStoreConnection, JoinRequest } from '@/lib/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import * as XLSX from 'xlsx';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, WithId } from "@/firebase";
-import { collection, query, where, doc, getDocs, writeBatch, documentId, serverTimestamp, limit } from "firebase/firestore";
+import { collection, query, where, doc, getDocs, writeBatch, documentId, serverTimestamp, limit, updateDoc, arrayUnion, getDoc, addDoc } from "firebase/firestore";
 
 
 const CustomerForm = ({ customer, onSave, onCancel }: { customer: Partial<Store> | null; onSave: (customer: Omit<Store, 'id' | 'ownerId' | 'managerUids'>) => void; onCancel: () => void }) => {
@@ -136,14 +140,51 @@ const CustomerForm = ({ customer, onSave, onCancel }: { customer: Partial<Store>
 
 
 export default function AdminCustomersPage() {
+    const router = useRouter();
     const { user, firestore } = useFirebase();
+    
     const { toast } = useToast();
+    const [activeTab, setActiveTab] = useState('all');
+    const DAYS_OF_WEEK = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'];
+
+    const handleExportExcel = (day?: string) => {
+        const listToExport = day ? customers.filter(c => c.deliveryDay === day) : customers;
+        
+        if (listToExport.length === 0) {
+            toast({ variant: 'destructive', title: 'Κενή Λίστα', description: `Δεν υπάρχουν πελάτες για ${day || 'όλες τις ημέρες'}.` });
+            return;
+        }
+
+        const data = listToExport.map(c => ({
+            'Επωνυμία': c.businessName,
+            'Υπεύθυνος': c.ownerName,
+            'Τηλέφωνο': c.phone,
+            'Τηλέφωνο 2': c.phone2 || '-',
+            'Email': c.email,
+            'Διεύθυνση': c.address,
+            'ΑΦΜ': c.taxId || '-',
+            'Ημέρα Παράδοσης': c.deliveryDay
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, day || 'Όλοι οι Πελάτες');
+        XLSX.writeFile(workbook, `Πελάτες_${day || 'Σύνολο'}_${new Date().toLocaleDateString('el-GR').replace(/\//g, '-')}.xlsx`);
+        
+        toast({ title: 'Η εξαγωγή ολοκληρώθηκε', description: `Το αρχείο για ${day || 'όλους τους πελάτες'} δημιουργήθηκε.` });
+    };
     
     const [customers, setCustomers] = useState<WithId<Store>[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessingRequest, setIsProcessingRequest] = useState<string | null>(null);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Partial<WithId<Store>> | null>(null);
+
+    // CSV Import state
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [parsedCustomers, setParsedCustomers] = useState<Array<{ businessName: string; ownerName: string; phone: string; deliveryDay: string }>>([]);
+    const [isImporting, setIsImporting] = useState(false);
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -158,22 +199,60 @@ export default function AdminCustomersPage() {
     }, [firestore, wholesaler]);
     const { data: connections, isLoading: isLoadingConnections, error: connectionsError } = useCollection<SupplierStoreConnection>(connectionsQuery);
 
+    // Fetch all join requests for this wholesaler. Filter status in JS to avoid
+    // 1. Fetch requests directed to the wholesaler specifically
+    const joinRequestsQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesaler) return null;
+        return query(
+            collection(firestore, 'joinRequests'),
+            where('wholesalerId', '==', wholesaler.id)
+        );
+    }, [firestore, wholesaler]);
+    const { data: allJoinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
+
+    // 2. Fetch requests directed to the connected stores (for backwards compatibility/missing wholesalerId)
+    const storeRequestsQuery = useMemoFirebase(() => {
+        if (!firestore || !connections || connections.length === 0) return null;
+        const storeIds = connections.map(c => c.storeId);
+        return query(
+            collection(firestore, 'joinRequests'),
+            where('businessId', 'in', storeIds.slice(0, 30))
+        );
+    }, [firestore, connections]);
+    const { data: storeJoinRequests } = useCollection<JoinRequest>(storeRequestsQuery);
+
+    const allPendingRequests = useMemo(() => {
+        const combined = new Map<string, WithId<JoinRequest>>();
+        
+        if (allJoinRequests) {
+            (allJoinRequests as WithId<JoinRequest>[]).forEach(req => combined.set(req.id, req));
+        }
+        if (storeJoinRequests) {
+            (storeJoinRequests as WithId<JoinRequest>[]).forEach(req => combined.set(req.id, req));
+        }
+
+        return Array.from(combined.values()).filter(r => r.status === 'pending');
+    }, [allJoinRequests, storeJoinRequests]);
+
      useEffect(() => {
         const fetchAndSetCustomers = async () => {
             if (connectionsError) {
-                console.error("Error fetching connections:", connectionsError);
+                console.error("[DEBUG] Error fetching connections:", connectionsError);
                 setIsLoading(false);
                 setCustomers([]);
                 return;
             }
 
             if (isLoadingConnections || !firestore) {
-                return; // Wait until connections are loaded and firestore is available
+                return;
             }
 
             setIsLoading(true);
+            console.log("[DEBUG] Wholesaler:", wholesaler?.id);
+            console.log("[DEBUG] Connections loaded:", connections?.length, connections);
 
             if (!connections || connections.length === 0) {
+                console.log("[DEBUG] No connections found for wholesaler:", wholesaler?.id);
                 setCustomers([]);
                 setIsLoading(false);
                 return;
@@ -182,8 +261,6 @@ export default function AdminCustomersPage() {
             const storeIds = connections.map(c => c.storeId);
 
             try {
-                // Firestore 'in' queries are limited to 30 items as of recent updates.
-                // For larger sets, you would need to chunk the array.
                 const storesQuery = query(collection(firestore, 'stores'), where(documentId(), 'in', storeIds));
                 const querySnapshot = await getDocs(storesQuery);
                 const fetchedStores = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WithId<Store>));
@@ -199,6 +276,51 @@ export default function AdminCustomersPage() {
 
         fetchAndSetCustomers();
     }, [connections, isLoadingConnections, firestore, connectionsError, toast]);
+
+    const handleApproveRequest = async (request: WithId<JoinRequest>) => {
+        if (!firestore || !wholesaler) return;
+        setIsProcessingRequest(request.id);
+        try {
+            const batch = writeBatch(firestore);
+            const requestRef = doc(firestore, 'joinRequests', request.id);
+
+            if (request.businessType === 'store') {
+                // Approve access to an existing store
+                const storeRef = doc(firestore, 'stores', request.businessId);
+                batch.update(storeRef, { managerUids: arrayUnion(request.requesterUid) });
+            } else {
+                // Approve access to the wholesaler (admin team member)
+                const wholesalerRef = doc(firestore, 'wholesalers', request.businessId);
+                batch.update(wholesalerRef, { adminUids: arrayUnion(request.requesterUid) });
+            }
+
+            // Mark request as approved
+            batch.update(requestRef, { status: 'approved' });
+            await batch.commit();
+
+            toast({ title: 'Αίτημα Εγκρίθηκε!', description: `Ο/Η ${request.requesterName} εντάχθηκε στην επιχείρηση.` });
+        } catch (e) {
+            console.error(e);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η έγκριση.' });
+        } finally {
+            setIsProcessingRequest(null);
+        }
+    };
+
+    const handleRejectRequest = async (request: WithId<JoinRequest>) => {
+        if (!firestore) return;
+        setIsProcessingRequest(request.id);
+        try {
+            const requestRef = doc(firestore, 'joinRequests', request.id);
+            await updateDoc(requestRef, { status: 'rejected' });
+            toast({ title: 'Αίτημα Απορρίφθηκε', description: `Το αίτημα του/της ${request.requesterName} απορρίφθηκε.` });
+        } catch (e) {
+            console.error(e);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η απόρριψη.' });
+        } finally {
+            setIsProcessingRequest(null);
+        }
+    };
     
     const handleSaveCustomer = async (customerData: Omit<Store, 'id' | 'ownerId' | 'managerUids'>) => {
         if (!firestore || !wholesaler) return;
@@ -214,7 +336,14 @@ export default function AdminCustomersPage() {
                 
                 // 1. Create the new Store document
                 const newStoreRef = doc(collection(firestore, 'stores'));
-                const newStoreData = { ...customerData, ownerId: null, managerUids: [] };
+                const cleanData = JSON.parse(JSON.stringify(customerData));
+                const newStoreData = { 
+                    ...cleanData, 
+                    ownerId: '', 
+                    managerUids: [],
+                    wholesalerIds: [wholesaler.id],
+                    email: customerData.email || '' 
+                };
                 batch.set(newStoreRef, newStoreData);
 
                 // 2. Create the connection document
@@ -224,12 +353,13 @@ export default function AdminCustomersPage() {
                     storeId: newStoreRef.id,
                     isActive: true,
                     connectionDate: serverTimestamp(),
+                    wholesalerOwnerId: wholesaler.ownerId,
+                    wholesalerAdminUids: wholesaler.adminUids,
                 };
                 batch.set(newConnectionRef, newConnectionData);
 
                 await batch.commit();
 
-                // Manually add to local state to avoid re-fetch
                 setCustomers(prev => [...prev, { ...newStoreData, id: newStoreRef.id }]);
 
                 toast({ title: "Επιτυχής Καταχώρηση", description: `Ο πελάτης '${customerData.businessName}' προστέθηκε.` });
@@ -243,6 +373,90 @@ export default function AdminCustomersPage() {
             setEditingCustomer(null);
         }
     }
+
+    // --- CSV Import Handlers ---
+    const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (!text) return;
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            const results: Array<{ businessName: string; ownerName: string; phone: string; deliveryDay: string }> = [];
+            for (const line of lines) {
+                const delimiter = line.includes(';') ? ';' : ',';
+                const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, ''));
+                if (parts.length < 2) continue;
+                const businessName = parts[0];
+                const ownerName = parts[1] || '';
+                const phone = parts[2] || '';
+                const deliveryDay = parts[3] || 'Δευτέρα';
+                // Skip header row
+                if (businessName.toLowerCase() === 'επωνυμία' || businessName.toLowerCase() === 'business' || businessName.toLowerCase() === 'name') continue;
+                if (businessName) {
+                    results.push({ businessName, ownerName, phone, deliveryDay });
+                }
+            }
+            if (results.length === 0) {
+                toast({ variant: 'destructive', title: 'Κενό Αρχείο', description: 'Δεν βρέθηκαν πελάτες στο αρχείο.' });
+                return;
+            }
+            setParsedCustomers(results);
+            setIsImportDialogOpen(true);
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
+    const handleConfirmImport = async () => {
+        if (!firestore || !wholesaler || parsedCustomers.length === 0) return;
+        setIsImporting(true);
+        try {
+            const batch = writeBatch(firestore);
+            const newCustomerEntries: WithId<Store>[] = [];
+
+            parsedCustomers.forEach(c => {
+                const newStoreRef = doc(collection(firestore, 'stores'));
+                const storeData = {
+                    businessName: c.businessName,
+                    ownerName: c.ownerName,
+                    phone: c.phone,
+                    deliveryDay: c.deliveryDay,
+                    email: '',
+                    address: '',
+                    taxId: '',
+                    ownerId: '',
+                    managerUids: [],
+                    wholesalerIds: [wholesaler.id],
+                };
+                batch.set(newStoreRef, storeData);
+
+                const newConnRef = doc(collection(firestore, 'supplierStoreConnections'));
+                batch.set(newConnRef, {
+                    wholesalerId: wholesaler.id,
+                    storeId: newStoreRef.id,
+                    isActive: true,
+                    connectionDate: serverTimestamp(),
+                    wholesalerOwnerId: wholesaler.ownerId,
+                    wholesalerAdminUids: wholesaler.adminUids,
+                });
+
+                newCustomerEntries.push({ ...storeData, id: newStoreRef.id } as WithId<Store>);
+            });
+
+            await batch.commit();
+            setCustomers(prev => [...prev, ...newCustomerEntries]);
+            toast({ title: 'Επιτυχής Εισαγωγή', description: `Προστέθηκαν ${parsedCustomers.length} πελάτες.` });
+            setIsImportDialogOpen(false);
+            setParsedCustomers([]);
+        } catch (error) {
+            console.error(error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Αποτυχία εισαγωγής πελατών.' });
+        } finally {
+            setIsImporting(false);
+        }
+    };
     
     const handleDeleteCustomer = async (customerId: string) => {
         if (!firestore || !wholesaler) return;
@@ -290,75 +504,215 @@ export default function AdminCustomersPage() {
     const combinedLoading = isLoadingWholesalers || isLoading;
 
     return (
-        <div>
+        <div className="space-y-6">
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-lg font-semibold md:text-2xl">Πελάτες</h1>
             </div>
 
+            {/* Pending Join Requests */}
+            {allPendingRequests.length > 0 && (
+                <Card className="border-amber-500/50 bg-amber-500/5">
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <Bell className="h-5 w-5 text-amber-500" />
+                            <CardTitle className="text-amber-500">Εκκρεμή Αιτήματα Σύνδεσης</CardTitle>
+                            <Badge variant="secondary" className="bg-amber-500 text-white">{allPendingRequests.length}</Badge>
+                        </div>
+                        <CardDescription>
+                            Χρήστες που ζητούν πρόσβαση στην επιχείρησή σας. Εγκρίνετε ή απορρίψτε τα αιτήματα.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Όνομα</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Επιχείρηση</TableHead>
+                                    <TableHead>Ημερομηνία</TableHead>
+                                    <TableHead className="text-right">Ενέργειες</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {allPendingRequests.map((request) => (
+                                    <TableRow key={request.id}>
+                                        <TableCell className="font-medium">{request.requesterName}</TableCell>
+                                        <TableCell className="text-muted-foreground">{request.requesterEmail}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">
+                                                {request.businessType === 'store' ? '🏪 Κατάστημα' : '🏭 Προμηθευτής'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">
+                                            {new Date(request.createdAt).toLocaleDateString('el-GR')}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
+                                                    onClick={() => handleApproveRequest(request)}
+                                                    disabled={isProcessingRequest === request.id}
+                                                >
+                                                    {isProcessingRequest === request.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                                                    )}
+                                                    Έγκριση
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+                                                    onClick={() => handleRejectRequest(request)}
+                                                    disabled={isProcessingRequest === request.id}
+                                                >
+                                                    <XCircle className="h-4 w-4 mr-1" />
+                                                    Απόρριψη
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Customer List */}
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <div>
                         <CardTitle>Λίστα Πελατών</CardTitle>
                         <CardDescription>
-                            Διαχειριστείτε τους πελάτες της επιχείρησής σας.
+                            Διαχειριστείτε τους πελάτες της επιχείρησής σας ανα ημέρα παράδοσης.
                         </CardDescription>
                     </div>
-                     <Button onClick={openDialogForNew} disabled={!wholesaler}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Καταχώρηση Πελάτη
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" className="relative h-9 px-4 text-xs sm:text-sm" disabled={!wholesaler}>
+                            <FileSpreadsheet className="mr-2 h-4 w-4" />
+                            Εισαγωγή
+                            <input
+                                type="file"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                accept=".csv,.txt,.xls,.xlsx"
+                                onChange={handleCsvUpload}
+                                disabled={!wholesaler}
+                            />
+                        </Button>
+                        <Button onClick={openDialogForNew} disabled={!wholesaler} className="h-9 px-4 text-xs sm:text-sm">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Νέος Πελάτης
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
-                   <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Επωνυμία</TableHead>
-                                <TableHead>Υπεύθυνος</TableHead>
-                                <TableHead className="hidden sm:table-cell">Τηλέφωνο</TableHead>
-                                <TableHead className="hidden md:table-cell">Ημέρα Παράδοσης</TableHead>
-                                <TableHead className="text-right">Ενέργειες</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {combinedLoading && (
-                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
-                                        <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                            {!combinedLoading && customers.map((customer) => (
-                                <TableRow key={customer.id}>
-                                    <TableCell className="font-medium">{customer.businessName}</TableCell>
-                                    <TableCell>{customer.ownerName}</TableCell>
-                                    <TableCell className="hidden sm:table-cell text-muted-foreground">{customer.phone}</TableCell>
-                                    <TableCell className="hidden md:table-cell">{customer.deliveryDay}</TableCell>
-                                    <TableCell className="text-right">
-                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => openDialogForEdit(customer)}>
-                                                    Επεξεργασία
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteCustomer(customer.id)}>
-                                                    Διαγραφή
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                            {!combinedLoading && customers.length === 0 && (
+                   <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+                           <TabsList className="bg-muted/30 p-1.5 rounded-2xl h-auto flex flex-wrap gap-1 justify-start border border-muted shadow-sm">
+                               <TabsTrigger 
+                                    value="all" 
+                                    className="rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
+                               >
+                                   Όλοι
+                               </TabsTrigger>
+                               {DAYS_OF_WEEK.map(day => (
+                                   <TabsTrigger 
+                                        key={day} 
+                                        value={day} 
+                                        className="rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
+                                   >
+                                       {day}
+                                   </TabsTrigger>
+                               ))}
+                           </TabsList>
+                           <Button 
+                                variant="outline" 
+                                className="h-11 px-6 border-primary/20 hover:bg-primary/5 font-bold shadow-sm flex-shrink-0"
+                                onClick={() => handleExportExcel(activeTab === 'all' ? undefined : activeTab)}
+                                disabled={combinedLoading}
+                           >
+                               <Download className="mr-2 h-5 w-5 text-primary" />
+                               Εξαγωγή {activeTab === 'all' ? 'Όλων των Πελατών' : activeTab}
+                           </Button>
+                       </div>
+
+                       <Table>
+                            <TableHeader>
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Δεν έχετε προσθέσει ακόμα πελάτες.</TableCell>
+                                    <TableHead>Επωνυμία</TableHead>
+                                    <TableHead>Υπεύθυνος</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Τηλέφωνο</TableHead>
+                                    <TableHead className="hidden md:table-cell">Ημέρα Παράδοσης</TableHead>
+                                    <TableHead className="text-right">Ενέργειες</TableHead>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                   </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {combinedLoading && (
+                                     <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center">
+                                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                {!combinedLoading && customers
+                                    .filter(c => activeTab === 'all' || c.deliveryDay === activeTab)
+                                    .map((customer) => (
+                                    <TableRow 
+                                        key={customer.id} 
+                                        className="cursor-pointer hover:bg-muted/50"
+                                        onClick={(e) => {
+                                            if ((e.target as HTMLElement).closest('button')) return;
+                                            router.push(`/admin/customers/${customer.id}`);
+                                        }}
+                                    >
+                                        <TableCell className="font-medium">
+                                            <div className="flex flex-col">
+                                                <span>{customer.businessName}</span>
+                                                <span className="sm:hidden text-xs text-muted-foreground">{customer.phone}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>{customer.ownerName}</TableCell>
+                                        <TableCell className="hidden sm:table-cell text-muted-foreground">{customer.phone}</TableCell>
+                                        <TableCell className="hidden md:table-cell">
+                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
+                                                {customer.deliveryDay}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                             <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => openDialogForEdit(customer)}>
+                                                        Επεξεργασία
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteCustomer(customer.id)}>
+                                                        Διαγραφή
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {!combinedLoading && customers.filter(c => activeTab === 'all' || c.deliveryDay === activeTab).length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                            {activeTab === 'all' 
+                                                ? 'Δεν έχετε προσθέσει ακόμα πελάτες.' 
+                                                : `Δεν υπάρχουν πελάτες για την ${activeTab}.`}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                       </Table>
+                   </Tabs>
                 </CardContent>
             </Card>
 
@@ -374,6 +728,46 @@ export default function AdminCustomersPage() {
                             }}
                          />
                      )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Προεπισκόπηση Εισαγωγής Πελατών</DialogTitle>
+                        <DialogDescription>
+                            Βρέθηκαν {parsedCustomers.length} πελάτες στο αρχείο. Ελέγξτε και επιβεβαιώστε.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[400px] overflow-y-auto border rounded-md">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 sticky top-0">
+                                <tr>
+                                    <th className="p-2 text-left font-medium">Επωνυμία</th>
+                                    <th className="p-2 text-left font-medium">Υπεύθυνος</th>
+                                    <th className="p-2 text-left font-medium">Τηλ.</th>
+                                    <th className="p-2 text-left font-medium">Ημέρα</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {parsedCustomers.map((c, i) => (
+                                    <tr key={i} className="hover:bg-muted/30">
+                                        <td className="p-2 font-medium">{c.businessName}</td>
+                                        <td className="p-2">{c.ownerName || '-'}</td>
+                                        <td className="p-2 text-xs">{c.phone || '-'}</td>
+                                        <td className="p-2 text-xs">{c.deliveryDay}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setIsImportDialogOpen(false); setParsedCustomers([]); }}>Ακύρωση</Button>
+                        <Button onClick={handleConfirmImport} disabled={isImporting}>
+                            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                            Εισαγωγή {parsedCustomers.length} Πελατών
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

@@ -16,7 +16,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { cn } from "@/lib/utils"
 import { ArrowDown, ArrowUp, Edit, PlusCircle, Trash2, Loader2 } from "lucide-react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -34,7 +34,6 @@ import { collection, query, where, doc, serverTimestamp, orderBy, Timestamp } fr
 import type { Order, Wholesaler, Product, Warehouse, WholesalerStockItem, PostItNote as PostItNoteType } from "@/lib/types";
 import { isToday, isYesterday, format, subDays, isSameDay, startOfWeek, endOfWeek, subWeeks, isWithinInterval, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { el } from 'date-fns/locale';
-import { products as allProducts } from '@/lib/data';
 
 type PostItNote = WithId<PostItNoteType>;
 
@@ -229,6 +228,28 @@ export default function AdminDashboardPage() {
   }, [wholesaler, firestore]);
   const { data: postItNotes, isLoading: isLoadingNotes } = useCollection<PostItNoteType>(postitsQuery);
 
+  // --- AUTO-FIX FOR TESTING ---
+  // Ensure the main test account has a predictable AFM and Code
+  useEffect(() => {
+    if (wholesaler && user?.email === 'admin@frozenfoods.gr' && (!wholesaler.taxId || wholesaler.supplierCode !== 'FROZEN')) {
+      const wholesalerRef = doc(firestore!, 'wholesalers', wholesaler.id);
+      updateDocumentNonBlocking(wholesalerRef, { 
+        taxId: '123123123', 
+        supplierCode: 'FROZEN' 
+      });
+      console.log('Test wholesaler fixed: AFM 123123123, Code FROZEN');
+    }
+  }, [wholesaler?.id, wholesaler?.taxId, wholesaler?.supplierCode, user?.email, firestore]);
+
+  // 5. Fetch real products from the wholesaler's catalog
+
+  // 5. Fetch real products from the wholesaler's catalog
+  const productsQuery = useMemoFirebase(() => {
+    if (!wholesaler || !firestore) return null;
+    return collection(firestore, 'wholesalers', wholesaler.id, 'products');
+  }, [wholesaler, firestore]);
+  const { data: realProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+
   const { todayOrders, pendingOrders } = useMemo(() => {
     if (!orders) return { todayOrders: 0, pendingOrders: 0 };
     const todayOrdersCount = orders.filter(o => isToday((o.date as unknown as Timestamp).toDate())).length;
@@ -388,10 +409,12 @@ export default function AdminDashboardPage() {
 
 
   const lowStockItems = useMemo(() => {
-    if (!stock || !allProducts) return [];
+    if (!stock || !realProducts || realProducts.length === 0) return [];
     return stock
     .map(stockItem => {
-        const product = allProducts.find(p => p.id === stockItem.productId);
+        // Robust matching: try Doc ID first, then productId field
+        const product = realProducts.find(p => p.id === stockItem.id) 
+            || realProducts.find(p => p.id === stockItem.productId);
         if (!product) return null;
         const { quantity, idealStock } = stockItem;
         if (idealStock > 0 && quantity < idealStock * 0.4) {
@@ -406,7 +429,7 @@ export default function AdminDashboardPage() {
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a,b) => (a.currentStock/a.idealStock) - (b.currentStock/b.idealStock));
-  }, [stock]);
+  }, [stock, realProducts]);
 
   const handleRoleChange = (role: string) => {
     if (role === 'store') {

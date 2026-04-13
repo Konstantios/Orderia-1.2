@@ -23,6 +23,8 @@ const formSchema = z.object({
     taxId: z.string().min(9, "Το ΑΦΜ πρέπει να έχει τουλάχιστον 9 χαρακτήρες."),
     businessPhone: z.string().min(10, "Το τηλέφωνο πρέπει να έχει 10 χαρακτήρες."),
     address: z.string().min(5, "Η διεύθυνση πρέπει να έχει τουλάχιστον 5 χαρακτήρες."),
+    city: z.string().min(2, "Η πόλη πρέπει να έχει τουλάχιστον 2 χαρακτήρες."),
+    deliveryDay: z.string().optional(),
     // User details
     userName: z.string().min(2, "Το όνομα πρέπει να έχει τουλάχιστον 2 χαρακτήρες."),
     userEmail: z.string().email("Μη έγκυρη διεύθυνση email."),
@@ -49,26 +51,39 @@ export default function AccountPage() {
         const fetchStoreData = async () => {
             setIsLoading(true);
             try {
-                // Find the store document where the current user is the owner
+                // Find the store document where the current user is the owner or manager
                 const storesRef = collection(firestore, 'stores');
-                const q = query(storesRef, where("ownerId", "==", user.uid));
-                const querySnapshot = await getDocs(q);
+                const qOwner = query(storesRef, where("ownerId", "==", user.uid));
+                const qManager = query(storesRef, where("managerUids", "array-contains", user.uid));
                 
-                if (!querySnapshot.empty) {
-                    const storeDoc = querySnapshot.docs[0];
+                const [ownerSnap, managerSnap] = await Promise.all([
+                    getDocs(qOwner),
+                    getDocs(qManager)
+                ]);
+                
+                let storeDoc = null;
+                if (!ownerSnap.empty) {
+                    storeDoc = ownerSnap.docs[0];
+                } else if (!managerSnap.empty) {
+                    storeDoc = managerSnap.docs[0];
+                }
+
+                if (storeDoc) {
                     const storeData = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
                     setStore(storeData);
                     // Populate form
                     reset({
                         businessName: storeData.businessName,
-                        taxId: storeData.taxId,
+                        taxId: storeData.taxId || '',
                         businessPhone: storeData.phone,
                         address: storeData.address,
-                        userName: storeData.ownerName, // Or user.displayName
+                        city: storeData.city || '',
+                        deliveryDay: storeData.deliveryDay || '',
+                        userName: storeData.ownerName || user.displayName || '',
                         userEmail: user.email || '',
                     });
                 } else {
-                    console.log("No store found for user, this shouldn't happen in a real app after onboarding");
+                    console.log("No store found for user");
                 }
 
             } catch (error) {
@@ -93,7 +108,7 @@ export default function AccountPage() {
             toast({
                 variant: 'destructive',
                 title: 'Σφάλμα',
-                description: 'Δεν είστε συνδεδεμένος.',
+                description: 'Προέκυψε σφάλμα κατά τη σύνδεση.',
             });
             return;
         }
@@ -106,6 +121,8 @@ export default function AccountPage() {
                 taxId: data.taxId,
                 phone: data.businessPhone,
                 address: data.address,
+                city: data.city,
+                deliveryDay: data.deliveryDay,
                 ownerName: data.userName,
             });
 
@@ -119,7 +136,7 @@ export default function AccountPage() {
 
             toast({
                 title: 'Επιτυχής Ενημέρωση',
-                description: 'Τα στοιχεία σας αποθηκεύτηκαν με επιτυχία.',
+                description: 'Τα στοιχεία της επιχείρησής σας αποθηκεύτηκαν.',
             });
 
         } catch (error: any) {
@@ -132,74 +149,89 @@ export default function AccountPage() {
     };
     
     if (isLoading || isUserLoading) {
-        return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+        return <div className="flex justify-center items-center min-h-[400px]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
     }
     
     if (!store) {
-        return <div className="text-center">Δεν βρέθηκαν τα στοιχεία της επιχείρησής σας.</div>;
+        return <div className="text-center p-12 bg-muted/30 rounded-xl">Δεν βρέθηκαν τα στοιχεία της επιχείρησής σας.</div>;
     }
 
     return (
-        <div className="space-y-6 max-w-4xl mx-auto">
-             <h1 className="font-headline text-3xl font-bold">Τα Στοιχεία μου</h1>
+        <div className="space-y-6 max-w-4xl mx-auto pb-10">
+             <div className="flex flex-col gap-1">
+                <h1 className="font-headline text-3xl font-bold">Προφίλ Καταστήματος</h1>
+                <p className="text-muted-foreground">Διαχειριστείτε τα στοιχεία εγγραφής και επικοινωνίας σας.</p>
+             </div>
+
              <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-                <Card>
-                    <CardHeader>
+                <Card className="border-2 border-primary/10 shadow-sm overflow-hidden">
+                    <CardHeader className="bg-primary/5 pb-6">
                         <CardTitle>Στοιχεία Επιχείρησης</CardTitle>
-                        <CardDescription>Επεξεργαστείτε τα στοιχεία της επιχείρησής σας.</CardDescription>
+                        <CardDescription>Οι πληροφορίες αυτές χρησιμοποιούνται για την ταυτοποίησή σας από τους προμηθευτές.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                         <div className="grid sm:grid-cols-2 gap-4">
+                    <CardContent className="space-y-6 pt-6">
+                         <div className="grid sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <Label htmlFor="businessName">Επωνυμία</Label>
-                                <Input id="businessName" {...register('businessName')} />
-                                {errors.businessName && <p className="text-xs text-destructive">{errors.businessName.message}</p>}
+                                <Label htmlFor="businessName">Επωνυμία Καταστήματος</Label>
+                                <Input id="businessName" {...register('businessName')} className="h-11"/>
+                                {errors.businessName && <p className="text-xs text-destructive font-medium">{errors.businessName.message}</p>}
                             </div>
                              <div className="space-y-2">
                                 <Label htmlFor="taxId">ΑΦΜ</Label>
-                                <Input id="taxId" {...register('taxId')} />
-                                {errors.taxId && <p className="text-xs text-destructive">{errors.taxId.message}</p>}
+                                <Input id="taxId" {...register('taxId')} className="h-11"/>
+                                {errors.taxId && <p className="text-xs text-destructive font-medium">{errors.taxId.message}</p>}
                             </div>
                         </div>
-                        <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="grid sm:grid-cols-2 gap-6">
                            <div className="space-y-2">
-                                <Label htmlFor="businessPhone">Τηλέφωνο Επιχείρησης</Label>
-                                <Input id="businessPhone" type="tel" {...register('businessPhone')} />
-                                {errors.businessPhone && <p className="text-xs text-destructive">{errors.businessPhone.message}</p>}
+                                <Label htmlFor="businessPhone">Τηλέφωνο Επικοινωνίας</Label>
+                                <Input id="businessPhone" type="tel" {...register('businessPhone')} className="h-11"/>
+                                {errors.businessPhone && <p className="text-xs text-destructive font-medium">{errors.businessPhone.message}</p>}
                             </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="deliveryDay">Προτιμώμενη Ημέρα Παράδοσης</Label>
+                                <Input id="deliveryDay" {...register('deliveryDay')} placeholder="π.χ. Δευτέρα, Τετάρτη" className="h-11"/>
+                            </div>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <Label htmlFor="address">Διεύθυνση</Label>
-                                <Input id="address" {...register('address')} />
-                                {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
+                                <Input id="address" {...register('address')} className="h-11"/>
+                                {errors.address && <p className="text-xs text-destructive font-medium">{errors.address.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="city">Πόλη / Περιοχή</Label>
+                                <Input id="city" {...register('city')} className="h-11"/>
+                                {errors.city && <p className="text-xs text-destructive font-medium">{errors.city.message}</p>}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
                 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Στοιχεία Χρήστη</CardTitle>
-                        <CardDescription>Επεξεργαστείτε τα προσωπικά σας στοιχεία.</CardDescription>
+                <Card className="border-2 border-accent/10 shadow-sm overflow-hidden">
+                    <CardHeader className="bg-accent/5 pb-6">
+                        <CardTitle>Στοιχεία Διαχειριστή</CardTitle>
+                        <CardDescription>Πληροφορίες για τη σύνδεσή σας στο σύστημα.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                       <div className="grid sm:grid-cols-2 gap-4">
+                    <CardContent className="space-y-6 pt-6">
+                       <div className="grid sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <Label htmlFor="userName">Ονοματεπώνυμο</Label>
-                                <Input id="userName" {...register('userName')} />
-                                 {errors.userName && <p className="text-xs text-destructive">{errors.userName.message}</p>}
+                                <Input id="userName" {...register('userName')} className="h-11"/>
+                                 {errors.userName && <p className="text-xs text-destructive font-medium">{errors.userName.message}</p>}
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="userEmail">Email</Label>
-                                <Input id="userEmail" type="email" {...register('userEmail')} />
-                                {errors.userEmail && <p className="text-xs text-destructive">{errors.userEmail.message}</p>}
+                                <Label htmlFor="userEmail">Email Κατόχου</Label>
+                                <Input id="userEmail" type="email" {...register('userEmail')} className="h-11"/>
+                                {errors.userEmail && <p className="text-xs text-destructive font-medium">{errors.userEmail.message}</p>}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                 <div className="flex justify-end">
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                 <div className="flex justify-end gap-3">
+                    <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto min-w-[180px] h-12 text-base font-bold">
+                        {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
                         Αποθήκευση Αλλαγών
                     </Button>
                 </div>
@@ -207,3 +239,4 @@ export default function AccountPage() {
         </div>
     );
 }
+

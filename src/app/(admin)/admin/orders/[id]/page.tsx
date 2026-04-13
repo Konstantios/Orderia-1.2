@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { el } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -158,7 +158,13 @@ export default function OrderDetailsPage() {
                                     );
                                     return (
                                         <li key={item.productId} className="flex items-center gap-4">
-                                            <Image src={product.imageUrl} alt={product.name} width={56} height={56} className="rounded-md object-cover" data-ai-hint={product.imageHint} />
+                                            {product.imageUrl ? (
+                                                <Image src={product.imageUrl} alt={product.name} width={56} height={56} className="rounded-md object-cover flex-shrink-0" data-ai-hint={product.imageHint} />
+                                            ) : (
+                                                <div className="w-14 h-14 bg-muted rounded-md flex items-center justify-center flex-shrink-0">
+                                                    <Package className="h-6 w-6 text-muted-foreground" />
+                                                </div>
+                                            )}
                                             <div className="flex-1">
                                                 <p className="font-semibold">{product.name}</p>
                                                 <p className="text-sm text-muted-foreground">{product.code}</p>

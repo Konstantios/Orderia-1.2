@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Order, Wholesaler, Product } from "@/lib/types"; // ADD Product
-import { Download, History, Loader2 } from "lucide-react";
+import { Download, History, Loader2, CheckCircle2, Truck } from "lucide-react";
 import { format, addDays, isSameDay } from 'date-fns';
 import { el } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp, writeBatch, doc } from 'firebase/firestore';
 
 export default function AdminOrdersPage() {
     const router = useRouter();
@@ -31,10 +31,9 @@ export default function AdminOrdersPage() {
 
     // 2. Fetch Orders for this Wholesaler
     const ordersQuery = useMemoFirebase(() => {
-        if (!firestore || !user) return null;
-        // The memberUids check is sufficient and secure
-        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid), where('status', '==', 'Εκκρεμής'), orderBy('deliveryDate', 'desc'));
-    }, [firestore, user]);
+        if (!user || !firestore) return null;
+        return query(collection(firestore, 'orders'), where('memberUids', 'array-contains', user.uid));
+    }, [user, firestore]);
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
 
     // 3. Fetch Wholesaler's products for the export function
@@ -47,6 +46,8 @@ export default function AdminOrdersPage() {
 
     const [nextSevenDays, setNextSevenDays] = useState<{ date: Date; dateString: string; dayName: string; formattedDate: string; }[]>([]);
     const [activeTab, setActiveTab] = useState<string>('');
+    const [statusTab, setStatusTab] = useState<string>('Εκκρεμής');
+
 
     useEffect(() => {
         const days = Array.from({ length: 7 }).map((_, i) => {
@@ -73,24 +74,31 @@ export default function AdminOrdersPage() {
 
         const selectedDate = selectedDayInfo.date;
         
-        const filteredOrders = orders.filter(o => {
+        return orders.filter(o => {
             const deliveryDate = (o.deliveryDate as unknown as Timestamp)?.toDate();
             return deliveryDate && isSameDay(deliveryDate, selectedDate);
         });
-
-        return filteredOrders;
     }, [activeTab, orders, nextSevenDays]);
+
+    const filteredOrdersByStatus = useMemo(() => {
+        return ordersForDay.filter(o => o.status === statusTab);
+    }, [ordersForDay, statusTab]);
+
+    const pendingCount = useMemo(() => ordersForDay.filter(o => o.status === 'Εκκρεμής').length, [ordersForDay]);
+    const shippedCount = useMemo(() => ordersForDay.filter(o => o.status === 'Απεσταλμένη').length, [ordersForDay]);
+
 
 
     const handleExport = () => {
-        if (ordersForDay.length === 0) {
+        if (filteredOrdersByStatus.length === 0) {
             toast({
                 title: "Δεν υπάρχουν παραγγελίες",
-                description: "Δεν βρέθηκαν εκκρεμείς παραγγελίες για εξαγωγή για την επιλεγμένη ημέρα.",
+                description: `Δεν βρέθηκαν ${statusTab.toLowerCase()} παραγγελίες για εξαγωγή για την επιλεγμένη ημέρα.`,
                 variant: "destructive"
             });
             return;
         }
+
 
         if (!products) {
             toast({
@@ -101,7 +109,7 @@ export default function AdminOrdersPage() {
             return;
         }
 
-        const exportData = ordersForDay.flatMap(order => {
+        const exportData = filteredOrdersByStatus.flatMap(order => {
             const commonData = {
                 'ID Παραγγελίας': order.id,
                 'Πελάτης': order.customerName,
@@ -145,18 +153,49 @@ export default function AdminOrdersPage() {
         worksheet['!cols'] = colWidths;
         
         const selectedDayInfo = nextSevenDays.find(d => d.dateString === activeTab);
-        const fileName = `Παραγγελίες_${selectedDayInfo?.dayName}_${selectedDayInfo?.formattedDate.replace('/', '-')}.xlsx`;
+        const fileName = `Παραγγελίες_${statusTab}_${selectedDayInfo?.dayName}_${selectedDayInfo?.formattedDate.replace('/', '-')}.xlsx`;
         XLSX.writeFile(workbook, fileName);
     };
     
-    const isLoading = isLoadingOrders || isLoadingWholesalers || isLoadingProducts; // Add products loading
+    const isLoading = isLoadingOrders || isLoadingWholesalers || isLoadingProducts;
+
+    const [isShipping, setIsShipping] = useState(false);
+
+    const pendingOrdersForDay = useMemo(() => {
+        return ordersForDay.filter(o => o.status === 'Εκκρεμής');
+    }, [ordersForDay]);
+
+    const handleMarkAllShipped = async () => {
+        if (!firestore || pendingOrdersForDay.length === 0) return;
+        setIsShipping(true);
+        try {
+            const batch = writeBatch(firestore);
+            pendingOrdersForDay.forEach(order => {
+                const orderRef = doc(firestore, 'orders', order.id);
+                batch.update(orderRef, { 
+                    status: 'Απεσταλμένη',
+                    shippedAt: Timestamp.now(),
+                });
+            });
+            await batch.commit();
+            toast({ 
+                title: 'Απεστάλησαν!', 
+                description: `${pendingOrdersForDay.length} παραγγελίες σημειώθηκαν ως απεσταλμένες.` 
+            });
+        } catch (error) {
+            console.error(error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η ενημέρωση.' });
+        } finally {
+            setIsShipping(false);
+        }
+    };
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h1 className="text-lg font-semibold md:text-2xl">Παραγγελίες</h1>
               <div className="flex gap-2">
-                <Button variant="outline"><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
+                <Button variant="outline" onClick={() => router.push('/admin/orders/history')}><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
                 <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
               </div>
             </div>
@@ -173,37 +212,82 @@ export default function AdminOrdersPage() {
                         ))}
                     </TabsList>
                     
-                    <TabsContent value={activeTab} className="mt-4">
-                         <div className="space-y-4">
-                            {isLoading ? ( // Use combined loading state
-                                <div className="flex items-center justify-center p-8">
-                                    <Loader2 className="h-8 w-8 animate-spin" />
-                                </div>
-                            ) : (
-                                <>
-                                    {ordersForDay.map(order => (
-                                        <Card key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/orders/${order.id}`)}>
-                                            <CardHeader>
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <CardTitle className="text-lg">{order.customerName}</CardTitle>
-                                                        <CardDescription>ID: #{order.id}</CardDescription>
-                                                    </div>
-                                                    <Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'}>{order.status}</Badge>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent>
-                                                <p className="text-sm text-muted-foreground">{order.items.length} προϊόντα • Σύνολο {order.items.reduce((acc, item) => acc + item.quantity, 0)} τεμάχια</p>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-        
-                                    {ordersForDay.length === 0 && (
-                                        <p className="text-muted-foreground text-center py-8">Δεν υπάρχουν εκκρεμείς παραγγελίες για αυτή την ημέρα.</p>
+                    <TabsContent value={activeTab} className="mt-4 space-y-4">
+                        <Tabs defaultValue={statusTab} value={statusTab} onValueChange={setStatusTab} className="w-full">
+                            <TabsList className="grid grid-cols-2 max-w-[400px]">
+                                <TabsTrigger value="Εκκρεμής" className="relative">
+                                    Εκκρεμείς
+                                    {pendingCount > 0 && (
+                                        <Badge className="ml-2 bg-destructive text-destructive-foreground hover:bg-destructive h-5 min-w-5 flex items-center justify-center rounded-full p-0 px-1 text-[10px]">
+                                            {pendingCount}
+                                        </Badge>
                                     )}
-                                </>
-                            )}
-                       </div>
+                                </TabsTrigger>
+                                <TabsTrigger value="Απεσταλμένη" className="relative">
+                                    Απεσταλμένες
+                                    {shippedCount > 0 && (
+                                        <Badge className="ml-2 bg-primary text-primary-foreground hover:bg-primary h-5 min-w-5 flex items-center justify-center rounded-full p-0 px-1 text-[10px]">
+                                            {shippedCount}
+                                        </Badge>
+                                    )}
+                                </TabsTrigger>
+                            </TabsList>
+
+                            <div className="mt-4 h-px bg-border/40" />
+
+                            <div className="space-y-4 mt-6">
+                                {isLoading ? (
+                                    <div className="flex items-center justify-center p-8">
+                                        <Loader2 className="h-8 w-8 animate-spin" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        {filteredOrdersByStatus.map(order => (
+                                            <Card key={order.id} className="cursor-pointer hover:bg-muted/50 border-l-4 border-l-transparent transition-all hover:border-l-primary" onClick={() => router.push(`/admin/orders/${order.id}`)}>
+                                                <CardHeader className="py-4">
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="space-y-1">
+                                                            <CardTitle className="text-lg font-bold">{order.customerName}</CardTitle>
+                                                            <CardDescription className="font-mono text-[10px]">ID: #{order.id}</CardDescription>
+                                                        </div>
+                                                        <Badge variant={order.status === 'Εκκρεμής' ? 'destructive' : order.status === 'Απεσταλμένη' ? 'default' : 'secondary'} className="px-3 py-1">
+                                                            {order.status}
+                                                        </Badge>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="pb-4">
+                                                    <p className="text-sm text-muted-foreground font-medium">{order.items.length} προϊόντα • Σύνολο {order.items.reduce((acc, item) => acc + item.quantity, 0)} τεμάχια</p>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+            
+                                        {filteredOrdersByStatus.length === 0 && (
+                                            <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-2xl border-2 border-dashed border-muted">
+                                                <p className="text-muted-foreground font-medium">Δεν υπάρχουν {statusTab.toLowerCase()} παραγγελίες για αυτή την ημέρα.</p>
+                                            </div>
+                                        )}
+
+                                        {statusTab === 'Εκκρεμής' && pendingOrdersForDay.length > 0 && (
+                                            <div className="flex justify-center pt-6 pb-2">
+                                                <Button 
+                                                    size="lg" 
+                                                    className="bg-green-600 hover:bg-green-700 text-white px-10 py-7 text-xl font-bold rounded-2xl shadow-xl shadow-green-600/20 transition-all hover:shadow-2xl hover:shadow-green-600/30 hover:-translate-y-1 active:scale-[0.98]"
+                                                    onClick={(e) => { e.stopPropagation(); handleMarkAllShipped(); }}
+                                                    disabled={isShipping}
+                                                >
+                                                    {isShipping ? (
+                                                        <Loader2 className="mr-3 h-6 w-6 animate-spin" />
+                                                    ) : (
+                                                        <Truck className="mr-3 h-6 w-6" />
+                                                    )}
+                                                    Ολοκλήρωση Αποστολής ({pendingOrdersForDay.length})
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </Tabs>
                     </TabsContent>
                 </Tabs>
                 )}

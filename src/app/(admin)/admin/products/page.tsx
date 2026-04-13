@@ -26,12 +26,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, updateDocumentNonBlocking, deleteDocumentNonBlocking, WithId } from "@/firebase";
-import { collection, query, where, doc, limit } from "firebase/firestore";
+import { collection, query, where, doc, limit, writeBatch } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import Image from 'next/image';
+import { Scan, Camera, Upload, Check, X, FileSpreadsheet } from 'lucide-react';
 
 const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Partial<WithId<Product>> | null; wholesaler: WithId<Wholesaler>; onSave: (productData: Omit<Product, 'id' | 'wholesalerOwnerId' | 'wholesalerAdminUids'>) => void; onCancel: () => void }) => {
     const [formData, setFormData] = useState<Partial<Product>>(product || { unit: 'τεμάχιο'});
+    const [isScanning, setIsScanning] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
+    const { firebaseApp } = useFirebase();
+    const storage = getStorage(firebaseApp);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -40,6 +46,36 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
     
     const handleSelectChange = (value: 'κιβώτιο' | 'κιλό' | 'τεμάχιο') => {
         setFormData(prev => ({...prev, unit: value}));
+    }
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !storage) return;
+
+        setIsUploading(true);
+        try {
+            const storageRef = ref(storage, `products/${wholesaler.id}/${Date.now()}_${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            setFormData(prev => ({...prev, imageUrl: downloadURL}));
+            toast({ title: "Επιτυχής Μεταφόρτωση", description: "Η εικόνα του προϊόντος ανέβηκε σωστά." });
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            toast({ variant: "destructive", title: "Σφάλμα", description: "Αποτυχία μεταφόρτωσης της εικόνας." });
+        } finally {
+            setIsUploading(false);
+        }
+    }
+
+    const simulateBarcodeScan = () => {
+        setIsScanning(true);
+        // Simulate a real-world delay for the "scanning effect"
+        setTimeout(() => {
+            const randomBarcode = "520" + Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
+            setFormData(prev => ({...prev, code: randomBarcode}));
+            setIsScanning(false);
+            toast({ title: "Barcode Σκαναρίστηκε", description: `Κωδικός: ${randomBarcode}` });
+        }, 1500);
     }
 
     const handleSubmit = () => {
@@ -75,13 +111,25 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+                {isScanning && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 text-white rounded-lg">
+                        <Scan className="h-12 w-12 animate-pulse mb-4 text-primary" />
+                        <p className="font-semibold px-4 text-center">Σκανάρισμα Barcode...</p>
+                        <Button variant="ghost" size="sm" onClick={() => setIsScanning(false)} className="mt-4 text-white hover:bg-white/20">Άκυρο</Button>
+                    </div>
+                )}
                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="name" className="text-right">Όνομα</Label>
                     <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} className="col-span-3" />
                 </div>
                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="code" className="text-right">Κωδικός</Label>
-                    <Input id="code" name="code" value={formData.code || ''} onChange={handleChange} className="col-span-3" />
+                    <div className="col-span-3 flex gap-2">
+                        <Input id="code" name="code" value={formData.code || ''} onChange={handleChange} className="flex-1" />
+                        <Button variant="outline" size="icon" onClick={simulateBarcodeScan} title="Σκανάρισμα Barcode">
+                            <Scan className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="unit" className="text-right">Μονάδα</Label>
@@ -96,14 +144,31 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="imageUrl" className="text-right">URL Εικόνας</Label>
-                    <Input id="imageUrl" name="imageUrl" value={formData.imageUrl || ''} onChange={handleChange} className="col-span-3" placeholder="https://..."/>
+                <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">Εικόνα</Label>
+                    <div className="col-span-3 space-y-4">
+                        <div className="flex gap-2">
+                            <Input id="imageUrl" name="imageUrl" value={formData.imageUrl || ''} onChange={handleChange} className="flex-1" placeholder="URL Εικόνας..."/>
+                            <Label htmlFor="image-upload" className="cursor-pointer">
+                                <Button variant="secondary" size="icon" asChild>
+                                    <div>
+                                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                                        <input id="image-upload" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploading} />
+                                    </div>
+                                </Button>
+                            </Label>
+                        </div>
+                        {formData.imageUrl && (
+                             <div className="relative aspect-video w-full rounded-md overflow-hidden border">
+                                <Image src={formData.imageUrl} alt="Προεπισκόπηση" fill className="object-cover" />
+                             </div>
+                        )}
+                    </div>
                 </div>
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={onCancel}>Ακύρωση</Button>
-                <Button onClick={handleSubmit}>Αποθήκευση</Button>
+                <Button onClick={handleSubmit} disabled={isUploading}>Αποθήκευση</Button>
             </DialogFooter>
         </>
     );
@@ -171,6 +236,90 @@ export default function AdminProductsPage() {
     
     const isLoading = isLoadingWholesalers || isLoadingProducts;
 
+    // --- CSV Import ---
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [parsedProducts, setParsedProducts] = useState<Array<{ code: string; name: string; piecesPerBox: string }>>([]);
+    const [isImporting, setIsImporting] = useState(false);
+
+    const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (!text) return;
+
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            const results: Array<{ code: string; name: string; piecesPerBox: string }> = [];
+
+            for (const line of lines) {
+                // Support both comma and semicolon delimiters
+                const delimiter = line.includes(';') ? ';' : ',';
+                const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, ''));
+
+                if (parts.length < 2) continue;
+
+                const code = parts[0];
+                const name = parts[1];
+                const piecesPerBox = parts[2] || '';
+
+                // Skip header row
+                if (code.toLowerCase() === 'κωδικός' || code.toLowerCase() === 'code' || code.toLowerCase() === 'kwdikos') continue;
+
+                if (code && name) {
+                    results.push({ code, name, piecesPerBox });
+                }
+            }
+
+            if (results.length === 0) {
+                toast({ variant: 'destructive', title: 'Κενό Αρχείο', description: 'Δεν βρέθηκαν προϊόντα στο αρχείο.' });
+                return;
+            }
+
+            setParsedProducts(results);
+            setIsImportDialogOpen(true);
+        };
+        reader.readAsText(file);
+        // Reset file input so re-selecting same file works
+        e.target.value = '';
+    };
+
+    const handleConfirmImport = async () => {
+        if (!firestore || !wholesaler || parsedProducts.length === 0) return;
+        setIsImporting(true);
+
+        try {
+            const batch = writeBatch(firestore);
+            const productsColRef = collection(firestore, 'wholesalers', wholesaler.id, 'products');
+
+            parsedProducts.forEach(p => {
+                const newDocRef = doc(productsColRef);
+                batch.set(newDocRef, {
+                    name: p.name,
+                    code: p.code,
+                    unit: 'κιβώτιο',
+                    piecesPerBox: parseInt(p.piecesPerBox) || 0,
+                    imageUrl: `https://picsum.photos/seed/${p.code}/400/300`,
+                    imageHint: p.name.toLowerCase(),
+                    wholesalerId: wholesaler.id,
+                    wholesalerOwnerId: wholesaler.ownerId,
+                    wholesalerAdminUids: wholesaler.adminUids,
+                });
+            });
+
+            await batch.commit();
+            toast({ title: 'Επιτυχής Εισαγωγή', description: `Προστέθηκαν ${parsedProducts.length} προϊόντα.` });
+            setIsImportDialogOpen(false);
+            setParsedProducts([]);
+        } catch (error) {
+            console.error(error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Αποτυχία εισαγωγής προϊόντων.' });
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
@@ -185,10 +334,23 @@ export default function AdminProductsPage() {
                             Διαχειριστείτε τα προϊόντα που προσφέρετε.
                         </CardDescription>
                     </div>
-                     <Button onClick={openDialogForNew} disabled={!wholesaler}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Προσθήκη Προϊόντος
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" className="relative" disabled={!wholesaler}>
+                            <FileSpreadsheet className="mr-2 h-4 w-4" />
+                            Εισαγωγή Excel
+                            <input
+                                type="file"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                accept=".csv,.txt,.xls,.xlsx"
+                                onChange={handleCsvUpload}
+                                disabled={!wholesaler}
+                            />
+                        </Button>
+                        <Button onClick={openDialogForNew} disabled={!wholesaler}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Προσθήκη Προϊόντος
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                    <Table>
@@ -261,6 +423,44 @@ export default function AdminProductsPage() {
                             }}
                          />
                      )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Προεπισκόπηση Εισαγωγής</DialogTitle>
+                        <DialogDescription>
+                            Βρέθηκαν {parsedProducts.length} προϊόντα στο αρχείο. Ελέγξτε και επιβεβαιώστε.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[400px] overflow-y-auto border rounded-md">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 sticky top-0">
+                                <tr>
+                                    <th className="p-2 text-left font-medium">Κωδικός</th>
+                                    <th className="p-2 text-left font-medium">Όνομα</th>
+                                    <th className="p-2 text-left font-medium">Τεμ/Κιβ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {parsedProducts.map((p, i) => (
+                                    <tr key={i} className="hover:bg-muted/30">
+                                        <td className="p-2 font-mono text-xs">{p.code}</td>
+                                        <td className="p-2">{p.name}</td>
+                                        <td className="p-2 text-center">{p.piecesPerBox || '-'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setIsImportDialogOpen(false); setParsedProducts([]); }}>Ακύρωση</Button>
+                        <Button onClick={handleConfirmImport} disabled={isImporting}>
+                            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                            Εισαγωγή {parsedProducts.length} Προϊόντων
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

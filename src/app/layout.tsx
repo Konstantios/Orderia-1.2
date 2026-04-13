@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase';
+import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 
 export const metadata: Metadata = {
   title: 'Orderia',
@@ -23,7 +24,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="font-body bg-background text-foreground antialiased">
+      <body className="font-body bg-background text-foreground antialiased overflow-x-hidden">
         <FirebaseClientProvider>
           {children}
         </FirebaseClientProvider>

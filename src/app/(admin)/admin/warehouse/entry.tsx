@@ -64,7 +64,7 @@ export function AdminWarehouseEntry({ products, stock, onSync }: { products: Pro
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const detectionIntervalRef = useRef<NodeJS.Timeout>();
+  const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const warehouseBg = PlaceHolderImages.find(img => img.id === 'warehouse-background');
 
@@ -73,12 +73,25 @@ export function AdminWarehouseEntry({ products, stock, onSync }: { products: Pro
     setScannedItems({});
   };
 
-  const inventoryData = useMemo(() => products.map(p => {
-    const stockItem = stock.find(i => i.productId === p.id);
-    const currentStock = stockItem?.quantity || 0;
-    const idealStock = stockItem?.idealStock || 0;
-    return { product: p, currentStock, idealStock };
-  }), [products, stock]);
+  const inventoryData = useMemo(() => {
+    // Index stock for O(1) lookup
+    const stockMap = new Map<string, WholesalerStockItem>();
+    stock.forEach(item => stockMap.set(item.productId, item));
+
+    return products.map(p => {
+      const stockItem = stockMap.get(p.id);
+      const currentStock = stockItem?.quantity || 0;
+      const idealStock = stockItem?.idealStock || 0;
+      return { product: p, currentStock, idealStock };
+    });
+  }, [products, stock]);
+
+  // Index products by code for O(1) lookup during scanning
+  const productCodeMap = useMemo(() => {
+    const map = new Map<string, Product>();
+    products.forEach(p => map.set(p.code, p));
+    return map;
+  }, [products]);
 
   const handleConfirmScan = () => {
     if (!productForConfirmation) return;
@@ -147,7 +160,7 @@ export function AdminWarehouseEntry({ products, stock, onSync }: { products: Pro
                 if (newScannedCode !== lastScannedCode) {
                     setLastScannedCode(newScannedCode); // Prevent immediate re-scan of the same code
                     playBeep();
-                    const product = products.find(p => p.code === newScannedCode);
+                    const product = productCodeMap.get(newScannedCode);
                     if (product) {
                         setProductForConfirmation(product);
                     } else {

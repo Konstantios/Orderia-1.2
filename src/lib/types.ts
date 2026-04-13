@@ -54,6 +54,7 @@ export interface Wholesaler {
     ownerName: string;
     adminUids: string[];
     taxId: string;
+    description?: string;
 }
 
 export interface CustomerInventoryItem {
@@ -142,4 +143,16 @@ export interface Notification {
   description: string;
   date: string;
   read: boolean;
+}
+
+export interface JoinRequest {
+  id: string;
+  requesterUid: string;
+  businessId: string;
+  businessName: string;
+  businessType: 'store' | 'wholesaler';
+  requesterName: string;
+  requesterEmail: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
 }

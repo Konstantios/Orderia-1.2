@@ -6,33 +6,33 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { products as allProducts, customers } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Star, Loader2, Minus, Plus } from 'lucide-react';
+import { Star, Loader2, Minus, Plus, Package } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
 import { Separator } from '@/components/ui/separator';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryEntry } from './entry';
 import { InventoryExit } from './exit';
 import { useFirebase, useCollection, useFirestore, useMemoFirebase, setDocumentNonBlocking, type WithId } from '@/firebase';
-import { collection, query, where, doc, writeBatch, increment, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch, increment, getDocs, setDoc } from 'firebase/firestore';
 import type { Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 
 const getStockColor = (current: number, ideal: number) => {
-    if (ideal === 0) return 'bg-muted/50 border-transparent';
+    if (ideal === 0) return 'bg-muted/20 border-transparent text-muted-foreground';
     const ratio = current / ideal;
     if (ratio >= 0.8) {
-      return 'bg-green-400/10 border-green-400/50 text-green-400';
+      return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
     }
     if (ratio >= 0.4) {
-      return 'bg-yellow-400/10 border-yellow-400/50 text-yellow-400';
+      return 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400';
     }
-    return 'bg-destructive/20 border-destructive/50 text-destructive';
+    return 'bg-red-500/20 border-red-500/40 text-red-600 dark:text-red-400 font-bold';
 };
 
 export default function InventoryPage() {
@@ -98,10 +98,36 @@ export default function InventoryPage() {
     }, [firestore, store, user]);
     const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
 
-    // For now, assume a single hardcoded supplier and their products are available to the store
-    const [supplier, setSupplier] = useState(customers[0]);
-    const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
-    const inventoryProducts = allProducts.filter(p => supplier.products.some(cp => cp.productId === p.id));
+    // --- Fetch Connected Wholesaler ---
+    const connectionsQuery = useMemoFirebase(() => {
+        if (!firestore || !store) return null;
+        return query(collection(firestore, 'supplierStoreConnections'), where('storeId', '==', store.id), where('isActive', '==', true));
+    }, [firestore, store]);
+    const { data: connections, isLoading: isLoadingConnections } = useCollection<WithId<any>>(connectionsQuery);
+
+    const wholesalerId = connections?.[0]?.wholesalerId;
+
+    const [wholesalerData, setWholesalerData] = useState<any>(null);
+    useEffect(() => {
+        if (!firestore || !wholesalerId) return;
+        const fetchWholesaler = async () => {
+            const snap = await getDocs(query(collection(firestore, 'wholesalers'), where('__name__', '==', wholesalerId)));
+            if (!snap.empty) {
+                setWholesalerData({ id: snap.docs[0].id, ...snap.docs[0].data() });
+            }
+        };
+        fetchWholesaler();
+    }, [firestore, wholesalerId]);
+
+    const wholesalerProductsQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesalerId) return null;
+        return collection(firestore, 'wholesalers', wholesalerId, 'products');
+    }, [firestore, wholesalerId]);
+    const { data: wholesalerProducts, isLoading: isLoadingProducts } = useCollection<WithId<any>>(wholesalerProductsQuery);
+
+    const inventoryProducts = wholesalerProducts || [];
+    const supplierLogo = wholesalerData?.logoUrl ? { imageUrl: wholesalerData.logoUrl, imageHint: 'Wholesaler logo' } : PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+    const supplierName = wholesalerData?.companyName || 'Προμηθευτής';
     
     const handleSync = async (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out') => {
         if (!firestore || !store) {
@@ -150,42 +176,59 @@ export default function InventoryPage() {
         });
     };
     
-    const handleStockChange = (productId: string, value: string) => {
-        if (!firestore || !store) return;
+    const handleStockChange = async (productId: string, value: string) => {
+        if (!firestore || !store || !user) return;
 
         const newStock = parseInt(value, 10);
         const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
 
-        const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-        setDocumentNonBlocking(docRef, { 
-            productId: productId, 
-            storeId: store.id, 
-            currentStock: stockValue,
-            ownerId: store.ownerId,
-            managerUids: store.managerUids
-        }, { merge: true });
+        try {
+            const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
+            await setDoc(docRef, { 
+                productId: productId, 
+                storeId: store.id, 
+                currentStock: stockValue,
+                ownerId: store.ownerId || user.uid,
+                managerUids: store.managerUids || [user.uid]
+            }, { merge: true });
+        } catch (error) {
+            console.error('Stock write error:', error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η ενημέρωση του αποθέματος.' });
+        }
     };
 
-    const handleIdealStockChange = (productId: string, value: string) => {
-        if (!firestore || !store) return;
+    const handleIdealStockChange = async (productId: string, value: string) => {
+        if (!firestore || !store || !user) return;
 
         const newIdealStock = parseInt(value, 10);
         const idealStockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
 
-        const docRef = doc(firestore, 'stores', store.id, 'productConfigurations', productId);
-        setDocumentNonBlocking(docRef, { 
-            productId: productId, 
-            storeId: store.id, 
-            idealStock: idealStockValue,
-            ownerId: store.ownerId,
-            managerUids: store.managerUids
-        }, { merge: true });
+        try {
+            const docRef = doc(firestore, 'stores', store.id, 'productConfigurations', productId);
+            await setDoc(docRef, { 
+                productId: productId, 
+                storeId: store.id, 
+                idealStock: idealStockValue,
+                ownerId: store.ownerId || user.uid,
+                managerUids: store.managerUids || [user.uid]
+            }, { merge: true });
+        } catch (error) {
+            console.error('Ideal stock write error:', error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η ενημέρωση του ιδανικού αποθέματος.' });
+        }
     };
 
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
-        const idealStock = productConfigs?.find(i => i.id === productId)?.idealStock || 0;
-        const inventoryItem = inventory?.find(i => i.id === productId);
+        
+        // Robust fetch: Priority 1: Doc ID matches productId. Priority 2: productId field matches.
+        const idealStock = productConfigs?.find(i => i.id === productId)?.idealStock 
+                        ?? productConfigs?.find(i => i.productId === productId)?.idealStock 
+                        ?? 0;
+                        
+        const inventoryItem = inventory?.find(i => i.id === productId) 
+                           ?? inventory?.find(i => i.productId === productId);
+                           
         const currentStock = inventoryItem?.currentStock || 0;
         const lastAction = inventoryItem?.lastAction;
         const suggestion = Math.max(0, idealStock - currentStock);
@@ -227,13 +270,13 @@ export default function InventoryPage() {
                                 <Card className="rounded-lg">
                                   <AccordionTrigger className="flex w-full items-center justify-between p-3 hover:no-underline">
                                       <div className="flex items-center gap-4 text-left">
-                                          <Image src={supplierLogo.imageUrl} alt={supplier.name} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
+                                          <Image src={supplierLogo.imageUrl} alt={supplierName} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
                                           <div>
                                               <div className="flex items-center gap-2">
-                                                  <p className="font-semibold">{supplier.name}</p>
+                                                  <p className="font-semibold">{supplierName}</p>
                                                   <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
                                               </div>
-                                              <p className="text-sm text-muted-foreground">{supplier.products.length} Ενεργά Προϊόντα</p>
+                                              <p className="text-sm text-muted-foreground">{inventoryProducts.length} Ενεργά Προϊόντα</p>
                                           </div>
                                       </div>
                                   </AccordionTrigger>
@@ -256,7 +299,13 @@ export default function InventoryPage() {
                                                 <Card key={id} className="overflow-hidden bg-card">
                                                     <CardContent className="p-4">
                                                         <div className="flex items-center gap-4">
-                                                            <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg object-cover" data-ai-hint={product.imageHint} />
+                                                            {product.imageUrl ? (
+                                                                <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg flex-shrink-0 object-cover" data-ai-hint={product.imageHint} />
+                                                            ) : (
+                                                                <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
+                                                                    <Package className="h-8 w-8 text-muted-foreground" />
+                                                                </div>
+                                                            )}
                                                             <div className="flex-1">
                                                                 <p className="font-semibold">{product.name}</p>
                                                                 <p className="text-sm text-muted-foreground">{product.code}</p>
@@ -272,7 +321,7 @@ export default function InventoryPage() {
                                                                         defaultValue={currentStock}
                                                                         onBlur={(e) => handleStockChange(id, e.target.value)}
                                                                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
+                                                                        className="w-16 h-auto p-0 text-2xl font-black text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
                                                                         min="0"
                                                                     />
                                                                     <div className="flex flex-col gap-1">
@@ -332,13 +381,13 @@ export default function InventoryPage() {
                     </div>
                 </TabsContent>
                 <TabsContent value="counting" className="mt-6">
-                    <InventoryCounting products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'counting')} />
+                    <InventoryCounting products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'counting')} />
                 </TabsContent>
                 <TabsContent value="in" className="mt-6">
-                    <InventoryEntry products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'in')} />
+                    <InventoryEntry products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'in')} />
                 </TabsContent>
                  <TabsContent value="out" className="mt-6">
-                    <InventoryExit products={inventoryProducts} customer={supplier} inventory={inventory || []} onSync={(items) => handleSync(items, 'out')} />
+                    <InventoryExit products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'out')} />
                 </TabsContent>
                 <TabsContent value="database" className="mt-6">
                     <InventoryDatabase products={inventoryProducts} />

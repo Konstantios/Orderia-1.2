@@ -27,11 +27,16 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
-  const [dialogView, setDialogView] = useState<'initial' | 'join' | 'register'>('initial');
+  const [dialogView, setDialogView] = useState<'initial' | 'join' | 'register' | 'register_confirm'>('initial');
+  
+  // Registration Data for confirmation
+  const [registrationData, setRegistrationData] = useState<any>(null);
+  const [selectedType, setSelectedType] = useState<'store' | 'supplier'>('store');
+
   
   // State for joining
   const [searchAfm, setSearchAfm] = useState('');
-  const [foundBusiness, setFoundBusiness] = useState<{ name: string; afm: string; id: string; type: 'store' | 'wholesaler' } | null>(null);
+  const [foundBusiness, setFoundBusiness] = useState<{ name: string; afm: string; id: string; type: 'store' | 'wholesaler'; wholesalerIds?: string[] } | null>(null);
 
   // Reset dialog state on close
   useEffect(() => {
@@ -90,7 +95,7 @@ export default function LoginPage() {
     
             if (!wholesalerSnap.empty || !wholesalerOwnerSnap.empty) {
                 router.push('/admin/dashboard');
-                return; // No need to set isLoggingIn to false as we are navigating away
+                return;
             }
     
             const [storeSnap, storeOwnerSnap] = await Promise.all([
@@ -102,6 +107,35 @@ export default function LoginPage() {
                 router.push('/dashboard');
                 return;
             }
+
+            // --- CLAIM LOGIC ---
+            // If not found by UID, search by email to see if it's a 'shadow' user
+            const wholesalersEmailQuery = query(wholesalersRef, where("email", "==", user.email), limit(1));
+            const storesEmailQuery = query(storesRef, where("email", "==", user.email), limit(1));
+
+            const [wholesalerEmailSnap, storeEmailSnap] = await Promise.all([
+                getDocs(wholesalersEmailQuery),
+                getDocs(storesEmailQuery)
+            ]);
+
+            if (!wholesalerEmailSnap.empty) {
+                const whDoc = wholesalerEmailSnap.docs[0];
+                await updateDoc(whDoc.ref, {
+                    adminUids: arrayUnion(user.uid)
+                });
+                router.push('/admin/dashboard');
+                return;
+            }
+
+            if (!storeEmailSnap.empty) {
+                const stDoc = storeEmailSnap.docs[0];
+                await updateDoc(stDoc.ref, {
+                    managerUids: arrayUnion(user.uid)
+                });
+                router.push('/dashboard');
+                return;
+            }
+            // --- END CLAIM LOGIC ---
     
             toast({
                 variant: "destructive",
@@ -141,8 +175,14 @@ export default function LoginPage() {
         ]);
 
         if (!storeSnapshot.empty) {
-            const doc = storeSnapshot.docs[0];
-            setFoundBusiness({ id: doc.id, name: doc.data().businessName, afm: doc.data().taxId, type: 'store' });
+            const storeDoc = storeSnapshot.docs[0];
+            setFoundBusiness({ 
+                id: storeDoc.id, 
+                name: storeDoc.data().businessName, 
+                afm: storeDoc.data().taxId, 
+                type: 'store',
+                wholesalerIds: storeDoc.data().wholesalerIds || []
+            });
         } else if (!wholesalerSnapshot.empty) {
             const doc = wholesalerSnapshot.docs[0];
             setFoundBusiness({ id: doc.id, name: doc.data().companyName, afm: doc.data().taxId, type: 'wholesaler' });
@@ -160,7 +200,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleSendRequest = (e: React.FormEvent) => {
+  const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !foundBusiness || !auth) return;
 
@@ -178,11 +218,14 @@ export default function LoginPage() {
         return;
     }
 
+    // Use wholesalerIds already fetched during the business search (no extra getDoc needed)
+    const wholesalerIds: string[] = foundBusiness.wholesalerIds || [];
+
     const onUserCreated = (user: User) => {
         if (!firestore || !foundBusiness) return;
         
         const joinRequestsRef = collection(firestore, 'joinRequests');
-        const newRequest = {
+        const newRequest: any = {
             requesterUid: user.uid,
             businessId: foundBusiness.id,
             businessName: foundBusiness.name,
@@ -192,6 +235,11 @@ export default function LoginPage() {
             status: 'pending',
             createdAt: new Date().toISOString(),
         };
+
+        // Embed the wholesalerId so the wholesaler can query for this request directly
+        if (wholesalerIds.length > 0) {
+            newRequest.wholesalerId = wholesalerIds[0];
+        }
 
         addDocumentNonBlocking(joinRequestsRef, newRequest).then(() => {
             auth.signOut();
@@ -221,34 +269,35 @@ export default function LoginPage() {
       });
 };
   
-  const handleRegisterBusiness = (e: React.FormEvent) => {
+  const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firestore || !auth) return;
-
     const formData = new FormData(e.target as HTMLFormElement);
-    const businessType = formData.get('businessType') as string;
-    const businessName = formData.get('businessName') as string;
-    const taxId = formData.get('vat') as string;
-    const ownerName = formData.get('adminName') as string;
-    const email = formData.get('adminEmail') as string;
-    const password = formData.get('adminPassword') as string;
+    const data = {
+        businessType: selectedType,
+        businessName: formData.get('businessName') as string,
+        taxId: formData.get('vat') as string,
+        ownerName: formData.get('adminName') as string,
+        email: formData.get('adminEmail') as string,
+        password: formData.get('adminPassword') as string,
+    };
 
-    if (!email || !password) {
-        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Το email και ο κωδικός είναι υποχρεωτικά.' });
+    if (!data.email || !data.password || !data.businessName || !data.taxId || !data.ownerName) {
+        toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Παρακαλώ συμπληρώστε όλα τα πεδία.' });
         return;
     }
-    if (password.length < 6) {
-        toast({
-            variant: 'destructive',
-            title: 'Αδύναμος Κωδικός',
-            description: 'Ο κωδικός πρόσβασης πρέπει να έχει τουλάχιστον 6 χαρακτήρες.',
-        });
+    if (data.password.length < 6) {
+        toast({ variant: 'destructive', title: 'Αδύναμος Κωδικός', description: 'Ο κωδικός πρόσβασης πρέπει να έχει τουλάχιστον 6 χαρακτήρες.' });
         return;
     }
-    if (!businessName || !taxId || !ownerName) {
-         toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Για νέα επιχείρηση, συμπληρώστε όλα τα πεδία.' });
-         return;
-    }
+
+    setRegistrationData(data);
+    setDialogView('register_confirm');
+  };
+
+  const handleRegisterBusiness = () => {
+    if (!firestore || !auth || !registrationData) return;
+    const { businessType, businessName, taxId, ownerName, email, password } = registrationData;
+
 
     const onCreateSuccess = async (user: User) => {
         if (!firestore) return;
@@ -360,26 +409,11 @@ export default function LoginPage() {
       </div>
       <Card className="mt-8 w-full max-w-sm border-2 border-primary/20 bg-card/80 shadow-lg shadow-primary/10">
         <CardHeader>
-          <CardTitle>Σύνδεση</CardTitle>
-          <CardDescription>Για είσοδο, χρησιμοποιήστε τους παρακάτω δοκιμαστικούς λογαριασμούς, ή δημιουργήστε τη δική σας επιχείρηση.</CardDescription>
+          <CardTitle className="text-2xl">Σύνδεση</CardTitle>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-             <div className="text-sm text-center bg-muted/50 p-3 rounded-lg">
-                <p><span className="font-semibold">Προμηθευτής:</span> admin@frozenfoods.gr</p>
-                <p><span className="font-semibold">Κατάστημα:</span> store@tastebakery.gr</p>
-                <p><span className="font-semibold">Κωδικός (για όλους):</span> password123</p>
-            </div>
-             <div className="relative pt-2">
-                <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">
-                        Σύνδεση
-                    </span>
-                </div>
-            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="user@example.com"/>
@@ -393,54 +427,61 @@ export default function LoginPage() {
               <Label htmlFor="remember-me">Να με θυμάσαι</Label>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+          <CardFooter className="flex flex-col gap-6">
             <Button type="submit" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-bold text-lg h-12" disabled={isLoggingIn}>
-              {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Σύνδεση'}
+              {isLoggingIn ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Είσοδος στο Σύστημα'}
             </Button>
-             <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
-                <DialogTrigger asChild>
-                     <Button variant="link" className="text-muted-foreground">Δεν έχετε λογαριασμό; Κάντε εγγραφή</Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                    {dialogView !== 'initial' && (
-                        <Button variant="ghost" size="sm" className="absolute left-4 top-4 text-muted-foreground z-10" onClick={() => setDialogView('initial')}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Πίσω
-                        </Button>
-                    )}
+            
+            <div className="w-full space-y-4 pt-2 border-t border-primary/10">
+              <div className="text-center">
+                <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  Νέος στην πλατφόρμα;
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <Card 
+                  onClick={() => { setDialogView('register'); setIsRequestDialogOpen(true); }} 
+                  className="cursor-pointer hover:bg-muted/50 hover:border-primary transition-all duration-200 group border-primary/10"
+                >
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-colors">
+                      <Building className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-bold leading-none">Νέα Επιχείρηση</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Για νέες καταχωρήσεις</p>
+                    </div>
+                  </div>
+                </Card>
 
-                    {dialogView === 'initial' && (
-                        <>
-                            <DialogHeader>
-                                <DialogTitle>Εγγραφή ή Συμμετοχή</DialogTitle>
-                                <DialogDescription>Δημιουργήστε ένα νέο λογαριασμό ή συνδεθείτε σε μια υπάρχουσα επιχείρηση.</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid grid-cols-1 gap-4 pt-4">
-                               <Card onClick={() => setDialogView('register')} className="cursor-pointer hover:bg-muted/50 hover:border-primary transition-colors">
-                                   <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                                       <Building className="h-10 w-10 text-primary" />
-                                       <div>
-                                           <CardTitle>Εγγραφή Νέας Επιχείρησης</CardTitle>
-                                           <CardDescription>Για ιδιοκτήτες που καταχωρούν την επιχείρησή τους για πρώτη φορά.</CardDescription>
-                                       </div>
-                                   </CardHeader>
-                               </Card>
-                               <Card onClick={() => setDialogView('join')} className="cursor-pointer hover:bg-muted/50 hover:border-accent transition-colors">
-                                   <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                                       <UserPlus className="h-10 w-10 text-accent" />
-                                       <div>
-                                           <CardTitle>Αίτημα Συμμετοχής</CardTitle>
-                                           <CardDescription>Αν η επιχείρησή σας είναι ήδη στην πλατφόρμα και θέλετε πρόσβαση.</CardDescription>
-                                       </div>
-                                   </CardHeader>
-                               </Card>
-                            </div>
-                        </>
-                    )}
+                <Card 
+                  onClick={() => { setDialogView('join'); setIsRequestDialogOpen(true); }} 
+                  className="cursor-pointer hover:bg-muted/50 hover:border-accent transition-all duration-200 group border-accent/10"
+                >
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="bg-accent/10 p-2 rounded-lg group-hover:bg-accent/20 transition-colors">
+                      <UserPlus className="h-5 w-5 text-accent" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-bold leading-none">Αίτημα Συμμετοχής</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Για σύνδεση με υπάρχουσα</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+             <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
+
+                <DialogContent className="sm:max-w-md">
+
+
+
                     
                     {dialogView === 'join' && (
                         <>
-                             <DialogHeader className="pt-8 sm:pt-0">
+                             <DialogHeader>
                                 <DialogTitle>Αναζήτηση Επιχείρησης</DialogTitle>
                                 <DialogDescription>
                                     Βρείτε την επιχείρησή σας με το ΑΦΜ για να στείλετε αίτημα συμμετοχής.
@@ -469,15 +510,16 @@ export default function LoginPage() {
                                     </Card>
                                      <div className="space-y-2">
                                         <Label htmlFor="joinerName">Το Ονοματεπώνυμό σας</Label>
-                                        <Input id="joinerName" name="joinerName" required defaultValue="Γιώργος Παπαδάκης"/>
+                                        <Input id="joinerName" name="joinerName" placeholder="π.χ. Γιώργος Παπαδάκης" required />
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="joinerEmail">Το Email σας</Label>
-                                        <Input id="joinerEmail" name="joinerEmail" type="email" required defaultValue="pol@gmail.com" />
+                                        <Input id="joinerEmail" name="joinerEmail" type="email" placeholder="π.χ. employee@mybusiness.gr" required />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="joinerPassword">Κωδικός Σύνδεσης</Label>
-                                        <Input id="joinerPassword" name="joinerPassword" type="password" required />
+                                        <Label htmlFor="joinerPassword">Κωδικός Πρόσβασης Λογαριασμού</Label>
+                                        <Input id="joinerPassword" name="joinerPassword" type="password" placeholder="Τουλάχιστον 6 χαρακτήρες" required />
+                                        <p className="text-xs text-muted-foreground">Αυτός θα είναι ο κωδικός για να συνδέεστε στην εφαρμογή.</p>
                                     </div>
                                     <Button type="submit" className="w-full">
                                         Αποστολή Αιτήματος Συμμετοχής
@@ -489,51 +531,114 @@ export default function LoginPage() {
 
                     {dialogView === 'register' && (
                         <>
-                             <DialogHeader className="pt-8 sm:pt-0">
+                             <DialogHeader>
                                 <DialogTitle>Εγγραφή Νέας Επιχείρησης</DialogTitle>
                                 <DialogDescription>
                                    Συμπληρώστε τα παρακάτω στοιχεία για να ξεκινήσετε.
                                 </DialogDescription>
                             </DialogHeader>
-                            <form onSubmit={handleRegisterBusiness} className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                    <Label>Τύπος Επιχείρησης</Label>
-                                    <RadioGroup name="businessType" defaultValue="store" className="flex gap-4">
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="store" id="r-store" />
-                                            <Label htmlFor="r-store">Κατάστημα</Label>
+                            <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-4">
+                                <div className="space-y-4">
+                                    <Label className="text-sm font-semibold">Τύπος Επιχείρησης</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div 
+                                            onClick={() => setSelectedType('store')}
+                                            className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${selectedType === 'store' ? 'border-primary bg-primary/5 shadow-md' : 'border-muted bg-background hover:border-primary/50'}`}
+                                        >
+                                            <div className={`p-3 rounded-full ${selectedType === 'store' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                                <Building className="h-6 w-6" />
+                                            </div>
+                                            <span className="font-bold text-sm">Κατάστημα</span>
                                         </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="supplier" id="r-supplier" />
-                                            <Label htmlFor="r-supplier">Προμηθευτής</Label>
+                                        <div 
+                                            onClick={() => setSelectedType('supplier')}
+                                            className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${selectedType === 'supplier' ? 'border-accent bg-accent/5 shadow-md' : 'border-muted bg-background hover:border-accent/50'}`}
+                                        >
+                                            <div className={`p-3 rounded-full ${selectedType === 'supplier' ? 'bg-accent text-accent-foreground' : 'bg-muted'}`}>
+                                                <UserPlus className="h-6 w-6" />
+                                            </div>
+                                            <span className="font-bold text-sm">Προμηθευτής</span>
                                         </div>
-                                    </RadioGroup>
+                                    </div>
                                 </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="businessName">Επωνυμία Επιχείρησης</Label>
-                                     <Input id="businessName" name="businessName" />
+                                     <Input id="businessName" name="businessName" required placeholder="π.χ. Taste Bakery ή Frozen Foods"/>
                                  </div>
                                   <div className="space-y-2">
-                                     <Label htmlFor="vat">ΑΦΜ</Label>
-                                     <Input id="vat" name="vat" />
+                                     <Label htmlFor="vat">ΑΦΜ (9 ψηφία)</Label>
+                                     <Input id="vat" name="vat" required placeholder="π.χ. 123456789"/>
                                  </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="adminName">Το Ονοματεπώνυμό σας</Label>
-                                     <Input id="adminName" name="adminName" />
+                                     <Input id="adminName" name="adminName" required placeholder="π.χ. Νίκος Παπαδόπουλος"/>
                                  </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="adminEmail">Το Email σας</Label>
-                                     <Input id="adminEmail" name="adminEmail" type="email" required/>
+                                     <Input id="adminEmail" name="adminEmail" type="email" required placeholder="admin@mybusiness.gr"/>
                                  </div>
                                  <div className="space-y-2">
                                      <Label htmlFor="adminPassword">Κωδικός Πρόσβασης</Label>
-                                     <Input id="adminPassword" name="adminPassword" type="password" required/>
+                                     <Input id="adminPassword" name="adminPassword" type="password" required placeholder="Τουλάχιστον 6 χαρακτήρες"/>
                                  </div>
                                 <DialogFooter className="pt-4">
-                                     <Button type="submit" className="w-full">Ολοκλήρωση Εγγραφής</Button>
+                                     <Button type="submit" className="w-full h-12 text-lg font-bold">Ολοκλήρωση Εγγραφής</Button>
                                 </DialogFooter>
                             </form>
                         </>
+                    )}
+
+                    {dialogView === 'register_confirm' && registrationData && (
+                        <div className="space-y-6 pt-4">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl">Επιβεβαίωση Εγγραφής</DialogTitle>
+                                <DialogDescription>
+                                    Παρακαλούμε επιβεβαιώστε τα στοιχεία της επιχείρησής σας.
+                                </DialogDescription>
+                            </DialogHeader>
+                            
+                            <div className="bg-muted/50 p-6 rounded-2xl space-y-4 border border-border">
+                                <div className="flex items-center gap-4 border-b pb-4 border-border/50">
+                                    <div className={`p-3 rounded-full ${registrationData.businessType === 'store' ? 'bg-primary text-primary-foreground' : 'bg-accent text-accent-foreground'}`}>
+                                        {registrationData.businessType === 'store' ? <Building className="h-6 w-6" /> : <UserPlus className="h-6 w-6" />}
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Τύπος Επιχείρησης</p>
+                                        <p className="text-lg font-bold">{registrationData.businessType === 'store' ? 'Κατάστημα (B2C)' : 'Προμηθευτής (B2B)'}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Επωνυμία</p>
+                                        <p className="font-semibold">{registrationData.businessName}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">ΑΦΜ</p>
+                                        <p className="font-semibold">{registrationData.taxId}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Διαχειριστής</p>
+                                    <p className="font-semibold">{registrationData.ownerName} ({registrationData.email})</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3">
+                                <div className="mt-0.5">⚠️</div>
+                                <p className="text-xs text-amber-600 dark:text-amber-500 leading-relaxed font-medium">
+                                    Βεβαιωθείτε ότι επιλέξατε τον σωστό τύπο επιχείρησης. Αυτή η ρύθμιση καθορίζει τις λειτουργίες που θα έχετε πρόσβαση (Παραγγελίες ή Πωλήσεις).
+                                </p>
+                            </div>
+
+                            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                                <Button variant="ghost" onClick={() => setDialogView('register')} className="flex-1">
+                                    Πίσω για διόρθωση
+                                </Button>
+                                <Button onClick={handleRegisterBusiness} className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-bold text-lg">
+                                    Επιβεβαίωση & Δημιουργία
+                                </Button>
+                            </DialogFooter>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
@@ -543,3 +648,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

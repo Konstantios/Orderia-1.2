@@ -1,24 +1,22 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { products as allProducts, customers, orderHistory } from '@/lib/data';
-import type { OrderItem, Store, CustomerInventoryItem, StoreProductConfiguration, Wholesaler } from '@/lib/types';
+import type { OrderItem, Store, CustomerInventoryItem, StoreProductConfiguration, Wholesaler, Product } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp } from 'lucide-react';
+import { Minus, Plus, Lightbulb, Loader2, ArrowDown, ArrowUp, Package } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { products as allProducts } from '@/lib/data';
 import { useFirebase, useCollection, useMemoFirebase, type WithId } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc } from 'firebase/firestore';
 
-const customer = customers[0];
-const customerProducts = allProducts.filter(p => customer.products.some(cp => cp.productId === p.id));
-const supplierLogo = PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+// Removed hardcoded customer/product constants
 
 function getNextDeliveryDate(deliveryDay: string): Date {
     const dayMapping: { [key: string]: number } = {
@@ -50,7 +48,7 @@ function getNextDeliveryDate(deliveryDay: string): Date {
 }
 
 
-export default function NewOrderPage() {
+function NewOrderPageContent() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState('');
   const [isCalculatingSuggestions, setIsCalculatingSuggestions] = useState(false);
@@ -63,6 +61,7 @@ export default function NewOrderPage() {
   const searchParams = useSearchParams();
 
   const { user, firestore } = useFirebase();
+  const [activeCategory, setActiveCategory] = useState('All');
 
   const [store, setStore] = useState<WithId<Store> | null>(null);
   const [isLoadingStores, setIsLoadingStores] = useState(true);
@@ -114,28 +113,97 @@ export default function NewOrderPage() {
   }, [firestore, store]);
   const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
 
+  // --- NEW: Fetch Connected Wholesaler ---
+  const connectionsQuery = useMemoFirebase(() => {
+      if (!firestore || !store) return null;
+      return query(collection(firestore, 'supplierStoreConnections'), where('storeId', '==', store.id), where('isActive', '==', true));
+  }, [firestore, store]);
+  const { data: connections, isLoading: isLoadingConnections } = useCollection<WithId<any>>(connectionsQuery);
+
+  const wholesalerId = connections?.[0]?.wholesalerId;
+
+  const wholesalerProductsQuery = useMemoFirebase(() => {
+      if (!firestore || !wholesalerId) return null;
+      return collection(firestore, 'wholesalers', wholesalerId, 'products');
+  }, [firestore, wholesalerId]);
+  const { data: wholesalerProducts, isLoading: isLoadingProducts } = useCollection<Product>(wholesalerProductsQuery);
+
+  const customerProducts = useMemo(() => {
+      // Use Firestore products if available and not empty, otherwise fallback to demo products
+      const list = (wholesalerProducts && wholesalerProducts.length > 0) 
+        ? wholesalerProducts 
+        : (isLoadingProducts ? [] : allProducts);
+      
+      // Only show products that are assigned to this store (have a config)
+      const assignedIds = new Set(productConfigs?.map(c => c.productId) || []);
+      
+      let filtered = list;
+      if (assignedIds.size > 0) {
+          filtered = filtered.filter(p => assignedIds.has(p.id));
+      }
+
+      if (activeCategory === 'All') return filtered;
+      return filtered.filter(p => p.category === activeCategory);
+  }, [wholesalerProducts, isLoadingProducts, activeCategory, productConfigs]);
+
+  const categories = useMemo(() => {
+      const list = (wholesalerProducts && wholesalerProducts.length > 0) 
+        ? wholesalerProducts 
+        : (isLoadingProducts ? ['All'] : allProducts);
+
+      const assignedIds = new Set(productConfigs?.map(c => c.productId) || []);
+      const visibleProducts = assignedIds.size > 0 
+          ? list.filter(p => assignedIds.has(p.id))
+          : list;
+          
+      const cats = new Set(visibleProducts.map(p => p.category).filter(Boolean));
+      return ['All', ...Array.from(cats)];
+  }, [wholesalerProducts, isLoadingProducts, productConfigs]);
+
+  const wholesalerListQuery = useMemoFirebase(() => {
+    if (!firestore || !wholesalerId) return null;
+    return query(collection(firestore, 'wholesalers'), where('__name__', '==', wholesalerId));
+  }, [firestore, wholesalerId]);
+  const { data: wholesalers } = useCollection<Wholesaler>(wholesalerListQuery);
+  const wholesaler = wholesalers?.[0];
+
+  const supplierLogo = wholesaler?.logoUrl ? { imageUrl: wholesaler.logoUrl, imageHint: 'Wholesaler logo' } : PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+
 
   const didMountNotes = useRef(false);
   const didMountOrderItems = useRef(false);
 
   // Load from localStorage on initial client render
   useEffect(() => {
-    const savedNotes = localStorage.getItem('orderNotes');
-    if (savedNotes) {
-      setNotes(savedNotes);
-    }
-    const savedOrderItems = localStorage.getItem('orderItems');
-    if (savedOrderItems) {
-      try {
-        const parsedItems = JSON.parse(savedOrderItems);
-        if (Array.isArray(parsedItems)) {
-          setOrderItems(parsedItems);
+    const handleLoad = () => {
+      const isReorder = searchParams.get('reorder') === 'true';
+      const isSuggested = searchParams.get('suggested') === 'true';
+
+      if (isReorder || isSuggested) {
+        // Only load from localStorage if explicitly reordering or suggested
+        const savedNotes = localStorage.getItem('orderNotes');
+        if (savedNotes) setNotes(savedNotes);
+        
+        const savedOrderItems = localStorage.getItem('orderItems');
+        if (savedOrderItems) {
+          try {
+            const parsedItems = JSON.parse(savedOrderItems);
+            if (Array.isArray(parsedItems)) setOrderItems(parsedItems);
+          } catch (error) {
+            console.error("Failed to parse order", error);
+          }
         }
-      } catch (error) {
-        console.error("Failed to parse order items from localStorage", error);
+      } else {
+        // Fresh navigation: Zero everything out
+        setOrderItems([]);
+        setNotes('');
+        localStorage.removeItem('orderItems');
+        localStorage.removeItem('orderNotes');
       }
-    }
-  }, []);
+    };
+
+    handleLoad();
+  }, [searchParams]);
 
   // Save notes to localStorage when they change, skipping the initial mount.
   useEffect(() => {
@@ -197,14 +265,32 @@ export default function NewOrderPage() {
   
   const isDataLoading = isLoadingStores || isLoadingInventory || isLoadingProductConfigs;
 
+  // Robust data fetching helper to ensure consistency between UI and Logic
+  const getStockData = useCallback((productId: string) => {
+      const invItemDoc = inventory?.find(i => i.id === productId);
+      const invItemField = inventory?.find(i => i.productId === productId);
+      const inventoryItem = invItemDoc || invItemField;
+      const currentStock = inventoryItem?.currentStock || 0;
+
+      const configDoc = productConfigs?.find(pc => pc.id === productId);
+      const configField = productConfigs?.find(pc => pc.productId === productId);
+      const configItem = configDoc || configField;
+      const idealStock = configItem?.idealStock || 0;
+
+      const suggestion = Math.max(0, idealStock - currentStock);
+      const ratio = idealStock > 0 ? currentStock / idealStock : (currentStock > 0 ? 1 : 0);
+
+      return { currentStock, idealStock, suggestion, ratio };
+  }, [inventory, productConfigs]);
+
   const toggleSuggestionMode = useCallback(() => {
     if (isSuggestionModeActive) {
-      // Deactivating suggestions
-      setOrderItems(preSuggestionOrderItems);
+      // Deactivating suggestions: Zero everything out as per user request
+      setOrderItems([]);
       setIsSuggestionModeActive(false);
       toast({
         title: "Οι προτάσεις απενεργοποιήθηκαν",
-        description: "Η παραγγελία σας επανήλθε στην προηγούμενη κατάστασή της.",
+        description: "Η παραγγελία μηδενίστηκε.",
       });
     } else {
       // Activating suggestions
@@ -212,44 +298,34 @@ export default function NewOrderPage() {
           toast({ title: 'Παρακαλώ περιμένετε', description: 'Φόρτωση δεδομένων αποθέματος...' });
           return;
       }
-      setIsCalculatingSuggestions(true);
-      setTimeout(() => {
-        try {
-          setPreSuggestionOrderItems([...orderItems]); // Save current order
+      
+      try {
+        setPreSuggestionOrderItems([...orderItems]); // Save current order
 
-          const newOrderItems: OrderItem[] = customerProducts
-            .map(product => {
-              const inventoryItem = inventory?.find(i => i.id === product.id);
-              const currentStock = inventoryItem?.currentStock || 0;
-              
-              const configItem = productConfigs?.find(pc => pc.id === product.id);
-              const idealStock = configItem?.idealStock || 0;
-
-              const suggestedQuantity = Math.max(0, idealStock - currentStock);
-              return { productId: product.id, quantity: suggestedQuantity };
-            })
-            .filter(item => item.quantity > 0);
-            
-          setOrderItems(newOrderItems);
-          setIsSuggestionModeActive(true);
+        const newOrderItems: OrderItem[] = customerProducts
+          .map(product => {
+            const { suggestion } = getStockData(product.id);
+            return { productId: product.id, quantity: suggestion };
+          })
+          .filter(item => item.quantity > 0);
           
-          toast({
-            title: "Οι Προτάσεις Εφαρμόστηκαν",
-            description: "Συμπληρώσαμε την παραγγελία με βάση τα ιδανικά επίπεδα αποθέματός σας.",
-          });
-        } catch (error) {
-          console.error(error);
-          toast({
-            variant: "destructive",
-            title: "Σφάλμα",
-            description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
-          });
-        } finally {
-          setIsCalculatingSuggestions(false);
-        }
-      }, 300);
+        setOrderItems(newOrderItems);
+        setIsSuggestionModeActive(true);
+        
+        toast({
+          title: "Οι Προτάσεις Εφαρμόστηκαν",
+          description: "Συμπληρώσαμε την παραγγελία με βάση τα ιδανικά επίπεδα αποθέματός σας.",
+        });
+      } catch (error) {
+        console.error(error);
+        toast({
+          variant: "destructive",
+          title: "Σφάλμα",
+          description: "Δεν ήταν δυνατή η δημιουργία προτάσεων.",
+        });
+      }
     }
-  }, [isSuggestionModeActive, orderItems, preSuggestionOrderItems, toast, inventory, productConfigs, isDataLoading]);
+  }, [isSuggestionModeActive, orderItems, preSuggestionOrderItems, toast, customerProducts, getStockData, isDataLoading]);
   
   useEffect(() => {
     const suggestedParam = searchParams.get('suggested');
@@ -273,17 +349,10 @@ export default function NewOrderPage() {
     }
 
     try {
-        // Find the 'Frozen Foods' wholesaler to link the order
-        const wholesalersRef = collection(firestore, 'wholesalers');
-        const q = query(wholesalersRef, where("companyName", "==", "Frozen Foods"));
-        const wholesalerSnapshot = await getDocs(q);
-
-        if (wholesalerSnapshot.empty) {
-            toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν βρέθηκε ο προμηθευτής 'Frozen Foods'." });
+        if (!wholesaler) {
+            toast({ variant: "destructive", title: "Σφάλμα", description: "Δεν βρέθηκε ο προμηθευτής." });
             return;
         }
-        const wholesalerDoc = wholesalerSnapshot.docs[0];
-        const wholesaler = { id: wholesalerDoc.id, ...wholesalerDoc.data() } as Wholesaler;
         
         const storeMembers = store.managerUids || [store.ownerId];
         const wholesalerMembers = wholesaler.adminUids || [wholesaler.ownerId];
@@ -341,7 +410,7 @@ export default function NewOrderPage() {
         }
         return acc;
     }, {} as Record<'κιβώτιο' | 'κιλό' | 'τεμάχιο', number>);
-  }, [orderItems]);
+  }, [orderItems, customerProducts]);
 
   const totalItems = useMemo(() => orderItems.reduce((sum, item) => sum + item.quantity, 0), [orderItems]);
 
@@ -349,9 +418,9 @@ export default function NewOrderPage() {
     <div className="space-y-6">
       
       <div className="flex items-center gap-4">
-        <Image src={supplierLogo.imageUrl} alt={customer.name} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
+        {supplierLogo && <Image src={supplierLogo.imageUrl} alt={wholesaler?.companyName || 'Supplier'} width={48} height={48} className="rounded-md" data-ai-hint={(supplierLogo as any).imageHint} />}
         <div>
-          <p className="font-semibold">{customer.name}</p>
+          <p className="font-semibold">{wholesaler?.companyName || 'Φόρτωση...'}</p>
           <p className="text-sm text-muted-foreground">{customerProducts.length} Ενεργά Προϊόντα</p>
         </div>
       </div>
@@ -376,70 +445,87 @@ export default function NewOrderPage() {
         </Button>
       </div>
 
+      <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-none">
+        {categories.map(category => (
+          <Button
+            key={category}
+            variant={activeCategory === category ? 'default' : 'secondary'}
+            size="sm"
+            onClick={() => setActiveCategory(category)}
+            className="whitespace-nowrap"
+          >
+            {category}
+          </Button>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Προϊόντα</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {customerProducts.map(product => (
+            {isLoadingProducts ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : customerProducts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Δεν βρέθηκαν διαθέσιμα προϊόντα.
+              </div>
+            ) : customerProducts.map(product => (
               <div
                 key={product.id}
                 className={cn(
-                  'flex flex-col gap-4 rounded-lg border p-4 transition-colors',
+                  'flex flex-col gap-3 rounded-lg border p-3 transition-colors',
                   getQuantity(product.id) > 0 && 'border-primary',
                   isSuggestionModeActive && getQuantity(product.id) > 0 && 'bg-primary/10 border-2'
                 )}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="relative h-20 w-20 flex-shrink-0">
+                <div className="flex items-start gap-3">
+                  <div className="relative h-16 w-16 flex-shrink-0 bg-muted/30 rounded-md overflow-hidden flex items-center justify-center">
+                    {product.imageUrl ? (
                       <Image
                         src={product.imageUrl}
                         alt={product.name}
-                        width={100}
-                        height={100}
+                        width={80}
+                        height={80}
                         data-ai-hint={product.imageHint}
-                        className="h-full w-full rounded-md object-cover"
+                        className="h-full w-full object-cover"
                       />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{product.name}</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-sm text-muted-foreground">{product.code}</p>
-                        {(() => {
-                          const lastOrder = orderHistory.length > 0 ? orderHistory[0] : undefined;
-                          const lastOrderItem = lastOrder?.items.find(
-                            (item) => item.productId === product.id
-                          );
-                          const lastOrderQuantity = lastOrderItem?.quantity || 0;
-                          const currentQuantity = getQuantity(product.id);
+                    ) : (
+                      <Package className="h-7 w-7 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm leading-tight">{product.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{product.code}</p>
+                    {(() => {
+                      const { currentStock, idealStock, suggestion, ratio: stockRatio } = getStockData(product.id);
 
-                          if (lastOrderQuantity === 0) {
-                            return null;
-                          }
+                      const stockColor = idealStock === 0 ? 'bg-muted text-muted-foreground' 
+                        : stockRatio >= 0.8 ? 'bg-green-500/15 text-green-400' 
+                        : stockRatio >= 0.4 ? 'bg-yellow-500/15 text-yellow-400' 
+                        : 'bg-destructive/15 text-destructive';
 
-                          let indicator = null;
-
-                          if (currentQuantity > lastOrderQuantity) {
-                            indicator = <ArrowUp className="h-3 w-3 text-green-400" />;
-                          } else if (currentQuantity < lastOrderQuantity) {
-                            indicator = <ArrowDown className="h-3 w-3 text-destructive" />;
-                          } else if (currentQuantity > 0) { // same quantity and not zero
-                            indicator = <Minus className="h-3 w-3 text-muted-foreground" />;
-                          }
-
-                          if (!indicator) return null;
-
-                          return (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <span>(προηγ: {lastOrderQuantity})</span>
-                              {indicator}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className={cn('text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full', stockColor)}>
+                            Απόθ: {currentStock}
+                          </span>
+                          {idealStock > 0 && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                              Ιδαν: {idealStock}
+                            </span>
+                          )}
+                          {suggestion > 0 && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-accent/20 text-accent">
+                              +{suggestion} πρόταση
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 
@@ -524,5 +610,13 @@ export default function NewOrderPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function NewOrderPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <NewOrderPageContent />
+    </Suspense>
   );
 }
