@@ -205,9 +205,9 @@ export function AdminWarehouseExit({ products, stock, onSync }: { products: Prod
   return (
     <div className="space-y-4">
       {isScanning && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center animate-in fade-in-0">
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center overflow-hidden touch-none h-[100dvh] w-screen animate-in fade-in-0">
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" autoPlay playsInline muted />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
             {/* Ambient Darkening Overlay */}
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
             

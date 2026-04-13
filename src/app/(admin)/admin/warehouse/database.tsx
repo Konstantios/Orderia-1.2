@@ -195,12 +195,12 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
       </Dialog>
 
       {isCameraOpen && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center animate-in fade-in-0">
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" autoPlay playsInline muted />
+        <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center overflow-hidden touch-none h-[100dvh] w-screen animate-in fade-in-0">
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" autoPlay playsInline muted />
           <canvas ref={canvasRef} className="hidden" />
           
           {cameraMode === 'barcode' ? (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
               {/* Ambient Darkening Overlay */}
               <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
               
