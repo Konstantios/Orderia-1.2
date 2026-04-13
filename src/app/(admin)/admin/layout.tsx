@@ -12,6 +12,7 @@ import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, limit } from 'firebase/firestore';
 import type { Wholesaler } from '@/lib/types';
+import { useEffect } from 'react';
 import {
   SidebarProvider,
   Sidebar,
@@ -22,7 +23,22 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarInset,
+  useSidebar,
 } from '@/components/ui/sidebar';
+
+// Βοηθητικό component για το αυτόματο κλείσιμο του sidebar στο κινητό μετά από πλοήγηση
+function MobileSidebarCloser() {
+  const pathname = usePathname();
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, setOpenMobile]);
+
+  return null;
+}
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Πίνακας Ελέγχου', icon: Icons.dashboard },
@@ -50,6 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <SidebarProvider className="h-[100dvh] overflow-hidden">
+        <MobileSidebarCloser />
         <Sidebar collapsible="icon" className="border-r bg-muted/40 h-full">
             <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
                 <Link href="/" className="flex items-center gap-2 font-semibold">

@@ -7,7 +7,15 @@ import { PullToRefresh } from '@/components/ui/pull-to-refresh';
 export const metadata: Metadata = {
   title: 'Orderia',
   description: 'Ευφυής βοηθός παραγγελιών B2B',
-  manifest: '/manifest.json',
+  themeColor: '#0a0a0a',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: 'cover',
+  },
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
@@ -19,7 +27,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Orderia',
   },
 };

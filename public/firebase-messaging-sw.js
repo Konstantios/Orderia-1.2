@@ -32,3 +32,8 @@ try {
 } catch (error) {
     console.error('[SW] Initialization error:', error);
 }
+
+// Minimal fetch handler to satisfy PWA installation criteria
+self.addEventListener('fetch', (event) => {
+    // This can be empty, but must exist
+});
