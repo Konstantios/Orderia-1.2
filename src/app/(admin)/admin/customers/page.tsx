@@ -194,7 +194,8 @@ export default function AdminCustomersPage() {
     const [customNotifTitle, setCustomNotifTitle] = useState('');
     const [customNotifBody, setCustomNotifBody] = useState('');
     const [isSendingCustomNotif, setIsSendingCustomNotif] = useState(false);
-    const [acknowledgedUids, setAcknowledgedUids] = useState<Set<string>>(new Set());
+    // Maps recipientUid to an array of acknowledged message titles
+    const [acknowledgedMessages, setAcknowledgedMessages] = useState<Map<string, {id: string, title: string}[]>>(new Map());
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -301,14 +302,26 @@ export default function AdminCustomersPage() {
                     where('type', '==', 'custom_message')
                 );
                 const querySnapshot = await getDocs(q);
-                const uids = new Set<string>();
+                const results = new Map<string, {id: string, title: string}[]>();
+                
                 querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
                     if (data.acknowledgedAt) {
-                        uids.add(data.recipientUid);
+                        const uid = data.recipientUid;
+                        const messageInfo = { id: doc.id, title: data.title };
+                        
+                        if (!results.has(uid)) {
+                            results.set(uid, []);
+                        }
+                        
+                        // Avoid duplicates for the same message title/id
+                        const current = results.get(uid)!;
+                        if (!current.find(m => m.id === doc.id)) {
+                            current.push(messageInfo);
+                        }
                     }
                 });
-                setAcknowledgedUids(uids);
+                setAcknowledgedMessages(results);
             } catch (e) {
                 console.error("Error fetching acknowledgements:", e);
             }
@@ -943,8 +956,22 @@ export default function AdminCustomersPage() {
                                 {!combinedLoading && customers
                                     .filter(c => activeTab === 'all' || c.deliveryDay === activeTab)
                                     .map((customer) => {
-                                        const isAcknowledged = (customer.ownerId && acknowledgedUids.has(customer.ownerId)) || 
-                                                              (customer.managerUids || []).some(uid => acknowledgedUids.has(uid));
+                                        const getCustomerMessages = () => {
+                                            const messages: {id: string, title: string}[] = [];
+                                            const uids = [customer.ownerId, ...(customer.managerUids || [])].filter(Boolean) as string[];
+                                            
+                                            uids.forEach(uid => {
+                                                const userMessages = acknowledgedMessages.get(uid) || [];
+                                                userMessages.forEach(msg => {
+                                                    if (!messages.find(m => m.id === msg.id)) {
+                                                        messages.push(msg);
+                                                    }
+                                                });
+                                            });
+                                            return messages;
+                                        };
+
+                                        const acknowledgedList = getCustomerMessages();
 
                                         return (
                                             <TableRow 
@@ -955,18 +982,21 @@ export default function AdminCustomersPage() {
                                                     router.push(`/admin/customers/${customer.id}`);
                                                 }}
                                             >
-                                                <TableCell className="font-medium">
-                                                    <div className="flex flex-col">
-                                                        <div className="flex items-center gap-2">
-                                                            <span>{customer.businessName}</span>
-                                                            {isAcknowledged && (
-                                                                <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1 py-0 px-1.5 text-[9px] font-bold h-5 uppercase">
-                                                                    <Check className="h-3 w-3" />
-                                                                    Ενημερώθηκε
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <span className="sm:hidden text-xs text-muted-foreground">{customer.phone}</span>
+                                                <TableCell className="font-medium p-4">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className="text-base font-bold">{customer.businessName}</span>
+                                                        
+                                                        {acknowledgedList.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {acknowledgedList.map((msg) => (
+                                                                    <Badge key={msg.id} variant="outline" className="text-green-700 border-green-200 bg-green-50/50 gap-1 py-0.5 px-2 text-[10px] font-medium transition-all hover:bg-green-100/50">
+                                                                        <Check className="h-3 w-3 text-green-600" />
+                                                                        <span className="opacity-70 mr-1 italic">Ενημερώθηκε για:</span>
+                                                                        <span className="font-bold uppercase">{msg.title}</span>
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>{customer.ownerName}</TableCell>
