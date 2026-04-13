@@ -223,10 +223,10 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
                   
                   {/* Cyberpunk HUD Labels */}
                   <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
-                     Barcode System Active
+                     Product Database Active
                   </div>
                   <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
-                     Align Barcode Here
+                     Align Barcode to Scan
                   </div>
 
                   {/* Grid Effect Overlay */}
@@ -241,13 +241,13 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
             </div>
           )}
 
-          <Button onClick={() => setIsCameraOpen(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-10 bg-black/50 rounded-full h-10 w-10">
-            <X className="h-6 w-6" />
+          <Button onClick={() => setIsCameraOpen(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-[110] bg-black/50 rounded-full h-10 w-10">
+            <X className="h-6 w-6 text-white" />
           </Button>
           
           {cameraMode === 'photo' && (
-             <Button onClick={takePhoto} size="lg" className="absolute bottom-10 z-10">
-                 <Camera className="mr-2 h-5 w-5" />
+             <Button onClick={takePhoto} size="lg" className="absolute bottom-10 z-[110] bg-primary hover:bg-primary/90 text-white font-bold h-14 px-8 rounded-2xl shadow-xl shadow-primary/20">
+                 <Camera className="mr-3 h-6 w-6" />
                  Λήψη Φωτογραφίας
              </Button>
           )}

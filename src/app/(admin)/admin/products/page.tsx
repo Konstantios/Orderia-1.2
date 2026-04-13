@@ -31,6 +31,18 @@ import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import Image from 'next/image';
 import { Scan, Camera, Upload, Check, X, FileSpreadsheet } from 'lucide-react';
 
+// Define BarcodeDetector for TypeScript
+interface BarcodeDetector {
+  new(options?: { formats: string[] }): BarcodeDetector;
+  detect(image: ImageBitmapSource): Promise<{ rawValue: string }[]>;
+}
+
+declare global {
+  interface Window {
+    BarcodeDetector: BarcodeDetector;
+  }
+}
+
 const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Partial<WithId<Product>> | null; wholesaler: WithId<Wholesaler>; onSave: (productData: Omit<Product, 'id' | 'wholesalerOwnerId' | 'wholesalerAdminUids'>) => void; onCancel: () => void }) => {
     const [formData, setFormData] = useState<Partial<Product>>(product || { unit: 'τεμάχιο'});
     const [isScanning, setIsScanning] = useState(false);
@@ -38,6 +50,10 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
     const { toast } = useToast();
     const { firebaseApp } = useFirebase();
     const storage = getStorage(firebaseApp);
+    
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -67,15 +83,95 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
         }
     }
 
-    const simulateBarcodeScan = () => {
+    const playBeep = () => {
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (!context) return;
+        try {
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(600, context.currentTime);
+            gainNode.gain.setValueAtTime(0.5, context.currentTime);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.15);
+        } catch(e) {
+            console.error("Could not play beep", e)
+        }
+    };
+
+    useEffect(() => {
+        if (!isScanning) {
+            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+            return;
+        }
+
+        let stream: MediaStream | null = null;
+        
+        const startScan = async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                toast({ variant: 'destructive', title: 'Σφάλμα Κάμερας', description: 'Η κάμερα δεν υποστηρίζεται.' });
+                setIsScanning(false);
+                return;
+            }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    } 
+                });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+
+                    if (!('BarcodeDetector' in window)) {
+                        toast({ variant: 'destructive', title: 'Το σκανάρισμα δεν υποστηρίζεται', description: 'Παρακαλώ χρησιμοποιήστε Chrome.' });
+                        setIsScanning(false);
+                        return;
+                    }
+
+                    const barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'ean_13', 'code_128', 'code_39', 'upc_a', 'upc_e'] });
+                    
+                    let isDetecting = false;
+                    detectionIntervalRef.current = setInterval(async () => {
+                        if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA || isDetecting) return;
+                        try {
+                            isDetecting = true;
+                            const barcodes = await barcodeDetector.detect(videoRef.current);
+                            if (barcodes.length > 0 && barcodes[0].rawValue) {
+                                const code = barcodes[0].rawValue;
+                                playBeep();
+                                setFormData(prev => ({...prev, code}));
+                                setIsScanning(false);
+                                toast({ title: "Barcode Σκαναρίστηκε", description: `Κωδικός: ${code}` });
+                            }
+                        } catch (e) {
+                            // ignore
+                        } finally {
+                            isDetecting = false;
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Αποτυχία πρόσβασης στην κάμερα.' });
+                setIsScanning(false);
+            }
+        };
+
+        startScan();
+
+        return () => {
+            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+            if (stream) stream.getTracks().forEach(track => track.stop());
+        };
+    }, [isScanning, toast]);
+
+    const handleStartScan = () => {
         setIsScanning(true);
-        // Simulate a real-world delay for the "scanning effect"
-        setTimeout(() => {
-            const randomBarcode = "520" + Math.floor(Math.random() * 1000000000).toString().padStart(10, '0');
-            setFormData(prev => ({...prev, code: randomBarcode}));
-            setIsScanning(false);
-            toast({ title: "Barcode Σκαναρίστηκε", description: `Κωδικός: ${randomBarcode}` });
-        }, 1500);
     }
 
     const handleSubmit = () => {
@@ -112,10 +208,41 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
             </DialogHeader>
             <div className="grid gap-4 py-4">
                 {isScanning && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 text-white rounded-lg">
-                        <Scan className="h-12 w-12 animate-pulse mb-4 text-primary" />
-                        <p className="font-semibold px-4 text-center">Σκανάρισμα Barcode...</p>
-                        <Button variant="ghost" size="sm" onClick={() => setIsScanning(false)} className="mt-4 text-white hover:bg-white/20">Άκυρο</Button>
+                    <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center overflow-hidden touch-none h-[100dvh] w-screen animate-in fade-in-0">
+                        <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black" autoPlay playsInline muted />
+                        <canvas ref={canvasRef} className="hidden" />
+                        
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                            {/* Ambient Darkening Overlay */}
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"></div>
+                            
+                            {/* Futuristic Scanning HUD */}
+                            <div className="relative w-11/12 max-w-sm aspect-square bg-white/5 backdrop-blur-[2px] rounded-3xl border border-white/10 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
+                                {/* Moving Laser Line */}
+                                <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
+                                
+                                {/* Scanner Viewfinder Corners */}
+                                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                
+                                {/* Cyberpunk HUD Labels */}
+                                <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
+                                   Product ID Scanner Active
+                                </div>
+                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
+                                   Align Barcode to Registry
+                                </div>
+
+                                {/* Grid Effect Overlay */}
+                                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                            </div>
+                        </div>
+
+                        <Button onClick={() => setIsScanning(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-[110] bg-black/50 rounded-full h-10 w-10">
+                            <X className="h-6 w-6 text-white" />
+                        </Button>
                     </div>
                 )}
                  <div className="grid grid-cols-4 items-center gap-4">
@@ -126,7 +253,7 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                     <Label htmlFor="code" className="text-right">Κωδικός</Label>
                     <div className="col-span-3 flex gap-2">
                         <Input id="code" name="code" value={formData.code || ''} onChange={handleChange} className="flex-1" />
-                        <Button variant="outline" size="icon" onClick={simulateBarcodeScan} title="Σκανάρισμα Barcode">
+                        <Button variant="outline" size="icon" onClick={handleStartScan} title="Σκανάρισμα Barcode">
                             <Scan className="h-4 w-4" />
                         </Button>
                     </div>
