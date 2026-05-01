@@ -284,15 +284,17 @@ export async function GET() {
                         },
                         body: JSON.stringify({
                             fields: {
-                                title: { stringValue: '⏰ ΥΠΕΝΘΥΜΙΣΗ ΠΑΡΑΓΓΕΛΙΑΣ' },
-                                description: { stringValue: `Ήρθε η ώρα για την παραγγελία σας στο κατάστημα ${businessName}!` },
-                                createdAt: { timestampValue: new Date().toISOString() },
-                                read: { booleanValue: false },
-                                recipientUid: { stringValue: ownerId },
-                                type: { stringValue: 'order_reminder' },
-                                storeId: { stringValue: fields.storeId?.stringValue || '' },
-                                storeName: { stringValue: businessName },
-                                wholesalerName: { stringValue: 'Υπενθύμιση' }
+                                 title: { stringValue: '⏰ ΥΠΕΝΘΥΜΙΣΗ ΠΑΡΑΓΓΕΛΙΑΣ' },
+                                 description: { stringValue: `Ήρθε η ώρα για την παραγγελία σας στο κατάστημα ${businessName}!` },
+                                 createdAt: { timestampValue: new Date().toISOString() },
+                                 date: { stringValue: new Date().toISOString() },
+                                 read: { booleanValue: false },
+                                 recipientUid: { stringValue: ownerId },
+                                 type: { stringValue: 'order_reminder' },
+                                 storeId: { stringValue: fields.storeId?.stringValue || '' },
+                                 storeName: { stringValue: businessName },
+                                 wholesalerId: { stringValue: 'system' },
+                                 wholesalerName: { stringValue: 'Υπενθύμιση' }
                             }
                         })
                     });

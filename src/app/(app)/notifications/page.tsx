@@ -24,15 +24,6 @@ export default function NotificationsPage() {
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [isAcknowledging, setIsAcknowledging] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (highlightId) {
-      const element = document.getElementById(`notification-${highlightId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [highlightId, notifications]); // dependencies might need to include notifications if they load later
-
   const notificationsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
@@ -43,6 +34,15 @@ export default function NotificationsPage() {
   }, [user, firestore]);
 
   const { data: notifications, isLoading } = useCollection<Notification>(notificationsQuery);
+
+  useEffect(() => {
+    if (highlightId && notifications) {
+      const element = document.getElementById(`notification-${highlightId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [highlightId, notifications]);
 
   const handleMarkAsRead = async (id: string) => {
     if (!firestore) return;
