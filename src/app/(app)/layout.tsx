@@ -89,7 +89,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           lastNotifId.current = newest.id;
           
           // Only show toast if it was created recently (to avoid toast storm on first load)
-          const createdAt = data.createdAt?.toDate?.() || (data.date ? new Date(data.date) : new Date());
+          let createdAt: Date;
+          try {
+            if (data.createdAt && typeof data.createdAt.toDate === 'function') {
+                createdAt = data.createdAt.toDate();
+            } else if (data.date) {
+                createdAt = new Date(data.date);
+            } else {
+                createdAt = new Date();
+            }
+          } catch (e) {
+            createdAt = new Date();
+          }
           if (new Date().getTime() - createdAt.getTime() < 60000) {
             toast({
               title: data.title,

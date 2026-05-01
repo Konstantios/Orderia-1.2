@@ -239,6 +239,30 @@ export async function GET() {
                             })
                         });
                     }
+                    }
+
+                    // 4. Also create a notification record in Firestore for the UI list
+                    const notificationUrl = `https://firestore.googleapis.com/v1/projects/${projectID}/databases/(default)/documents/notifications`;
+                    await fetch(notificationUrl, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            fields: {
+                                title: { stringValue: '⏰ ΥΠΕΝΘΥΜΙΣΗ ΠΑΡΑΓΓΕΛΙΑΣ' },
+                                description: { stringValue: `Ήρθε η ώρα για την παραγγελία σας στο κατάστημα ${businessName}!` },
+                                createdAt: { timestampValue: new Date().toISOString() },
+                                read: { booleanValue: false },
+                                recipientUid: { stringValue: ownerId },
+                                type: { stringValue: 'order_reminder' },
+                                storeId: { stringValue: fields.storeId?.stringValue || '' },
+                                storeName: { stringValue: businessName }
+                            }
+                        })
+                    });
+
                     triggeredResults.push({ ownerId, status: 'sent' });
                 }
             }

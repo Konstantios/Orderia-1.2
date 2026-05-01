@@ -234,7 +234,18 @@ export default function NotificationsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {notification.createdAt ? format(notification.createdAt.toDate(), 'eee, d MMM HH:mm', { locale: el }) : 'Μόλις τώρα'}
+                          {(() => {
+                            try {
+                              if (notification.createdAt && typeof (notification.createdAt as any).toDate === 'function') {
+                                return format(notification.createdAt.toDate(), 'eee, d MMM HH:mm', { locale: el });
+                              } else if (notification.date) {
+                                return format(new Date(notification.date), 'eee, d MMM HH:mm', { locale: el });
+                              }
+                            } catch (e) {
+                              console.error('Error formatting date:', e);
+                            }
+                            return 'Μόλις τώρα';
+                          })()}
                         </span>
                       </div>
                       {!notification.read && (
