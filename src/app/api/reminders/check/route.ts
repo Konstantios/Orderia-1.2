@@ -125,18 +125,8 @@ export async function GET() {
             checkWindows.push({ day: dGr, time: t, key });
         }
 
-        const queryBody = {
-            structuredQuery: {
-                from: [{ collectionId: 'reminders', allDescendants: true }],
-                where: {
-                    fieldFilter: {
-                        field: { fieldPath: 'isActive' },
-                        op: 'EQUAL',
-                        value: { booleanValue: true }
-                    }
-                }
-            }
-        };
+        // Re-use queryBody or simply remove the duplicate const declaration
+        // We already have queryBody defined above at line 90.
 
         const queryResponse = await fetch(firestoreUrl, {
             method: 'POST',
