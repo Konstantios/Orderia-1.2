@@ -1,7 +1,12 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
+# App Hosting configuration
+# See https://firebase.google.com/docs/app-hosting/configure-app-hosting
 
-runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+env:
+  - variable: FIREBASE_PROJECT_ID
+    secret: FIREBASE_PROJECT_ID
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+  - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    value: "BHdTRxSiWfXHiP-UYjdBgFQs-bFzca9Ce458WCuiPMVq3jcdyyl2w4i67RpKr05fD-kTDpNHXYGGMnEFFC0W-SE"
