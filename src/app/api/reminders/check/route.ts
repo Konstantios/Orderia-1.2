@@ -188,60 +188,86 @@ export async function GET() {
                     })
                 });
 
-                // 2. Fetch FCM Tokens for this user
-                const tokensUrl = `https://firestore.googleapis.com/v1/projects/${projectID}/databases/(default)/documents/fcmTokens`;
-                const tokensResponse = await fetch(tokensUrl, {
-                    headers: { Authorization: `Bearer ${accessToken}` }
-                });
-                const tokensData = await tokensResponse.json();
-                const tokens = (tokensData.documents || [])
-                    .filter((tDoc: any) => tDoc.fields.userId?.stringValue === ownerId)
-                    .map((tDoc: any) => tDoc.fields.token?.stringValue);
-
-                if (tokens.length > 0) {
-                    // 3. Send Push Notification
-                    for (const token of tokens) {
-                        const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectID}/messages:send`;
-                        await fetch(fcmUrl, {
-                            method: 'POST',
-                            headers: {
-                                Authorization: `Bearer ${accessToken}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                message: {
-                                    token,
-                                    notification: {
-                                        title: '⏰ ΥΠΕΝΘΥΜΙΣΗ ΠΑΡΑΓΓΕΛΙΑΣ',
-                                        body: `Ήρθε η ώρα για την παραγγελία σας στο κατάστημα ${businessName}!`
-                                    },
-                                    android: {
-                                        priority: 'high',
-                                        notification: {
-                                            sound: 'default',
-                                            click_action: 'OPEN_ALARM'
-                                        }
-                                    },
-                                    webpush: {
-                                        headers: {
-                                            Urgency: 'high'
-                                        },
-                                        fcm_options: {
-                                            link: '/orders/new?alarm=true'
-                                        }
-                                    },
-                                    data: {
-                                        type: 'ALARM',
-                                        storeName: businessName,
-                                        link: '/orders/new?alarm=true'
+                // 2. Fetch FCM Tokens for this user specifically using a query
+                let tokens: string[] = [];
+                try {
+                    const tokensQueryUrl = `https://firestore.googleapis.com/v1/projects/${projectID}/databases/(default)/documents:runQuery`;
+                    const tokensQueryResponse = await fetch(tokensQueryUrl, {
+                        method: 'POST',
+                        headers: { 
+                            Authorization: `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            structuredQuery: {
+                                from: [{ collectionId: 'fcmTokens' }],
+                                where: {
+                                    fieldFilter: {
+                                        field: { fieldPath: 'userId' },
+                                        op: 'EQUAL',
+                                        value: { stringValue: ownerId }
                                     }
                                 }
-                            })
-                        });
+                            }
+                        })
+                    });
+                    
+                    const tokensQueryResult = await tokensQueryResponse.json();
+                    if (Array.isArray(tokensQueryResult)) {
+                        tokens = tokensQueryResult
+                            .filter(r => r.document)
+                            .map(r => r.document.fields.token?.stringValue)
+                            .filter(t => !!t);
                     }
-                    }
+                } catch (tokenError) {
+                    console.error(`[Cron] Error fetching tokens for ${ownerId}:`, tokenError);
+                }
 
-                    // 4. Also create a notification record in Firestore for the UI list
+                // 3. Send Push Notifications if tokens found
+                if (tokens.length > 0) {
+                    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${projectID}/messages:send`;
+                    for (const token of tokens) {
+                        try {
+                            await fetch(fcmUrl, {
+                                method: 'POST',
+                                headers: {
+                                    Authorization: `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    message: {
+                                        token,
+                                        notification: {
+                                            title: '⏰ ΥΠΕΝΘΥΜΙΣΗ ΠΑΡΑΓΓΕΛΙΑΣ',
+                                            body: `Ήρθε η ώρα για την παραγγελία σας στο κατάστημα ${businessName}!`
+                                        },
+                                        android: {
+                                            priority: 'high',
+                                            notification: {
+                                                sound: 'default',
+                                                click_action: 'OPEN_ALARM'
+                                            }
+                                        },
+                                        webpush: {
+                                            headers: { Urgency: 'high' },
+                                            fcm_options: { link: '/orders/new?alarm=true' }
+                                        },
+                                        data: {
+                                            type: 'ALARM',
+                                            storeName: businessName,
+                                            link: '/orders/new?alarm=true'
+                                        }
+                                    }
+                                })
+                            });
+                        } catch (fcmError) {
+                            console.error(`[Cron] Error sending FCM to token:`, fcmError);
+                        }
+                    }
+                }
+
+                // 4. Create a notification record in Firestore for the UI list
+                try {
                     const notificationUrl = `https://firestore.googleapis.com/v1/projects/${projectID}/databases/(default)/documents/notifications`;
                     await fetch(notificationUrl, {
                         method: 'POST',
@@ -258,14 +284,18 @@ export async function GET() {
                                 recipientUid: { stringValue: ownerId },
                                 type: { stringValue: 'order_reminder' },
                                 storeId: { stringValue: fields.storeId?.stringValue || '' },
-                                storeName: { stringValue: businessName }
+                                storeName: { stringValue: businessName },
+                                wholesalerName: { stringValue: 'Υπενθύμιση' }
                             }
                         })
                     });
-
-                    triggeredResults.push({ ownerId, status: 'sent' });
+                } catch (notifError) {
+                    console.error(`[Cron] Error creating notification record:`, notifError);
                 }
+
+                triggeredResults.push({ ownerId, status: 'processed' });
             }
+        }
 
         return NextResponse.json({ 
             success: true, 
