@@ -118,6 +118,13 @@ service cloud.firestore {
       match /inventories/{storeInventoryId} {
          allow read, write: if isSignedIn();
       }
+
+      match /reminders/{reminderId} {
+        allow read, write: if isSignedIn() && (
+          (resource == null && request.resource.data.ownerId == request.auth.uid) ||
+          (resource != null && resource.data.ownerId == request.auth.uid)
+        );
+      }
     }
 
     match /joinRequests/{requestId} {
