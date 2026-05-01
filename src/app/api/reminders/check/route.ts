@@ -65,8 +65,8 @@ export async function GET() {
             hour12: false,
             weekday: 'long',
             year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
+            month: 'numeric', // Use numeric to match frontend (no leading zero)
+            day: 'numeric'    // Use numeric to match frontend (no leading zero)
         }).formatToParts(now);
 
         const getPart = (type: string) => greeceTime.find(p => p.type === type)?.value || '';
@@ -85,18 +85,16 @@ export async function GET() {
         const currentDayEn = getPart('weekday');
         const currentDay = dayMap[currentDayEn] || 'Δευτέρα';
         const currentTime = `${getPart('hour')}:${getPart('minute')}`;
+        
+        // IMPORTANT: Match frontend format precisely: 2026-5-1T11:29
         const currentMinuteKey = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${currentTime}`;
 
+        console.log(`[Cron] Running check for ${currentDay} ${currentTime} (Key: ${currentMinuteKey})`);
+
+        // Removed the fieldFilter because it requires a Collection Group index
         const queryBody = {
             structuredQuery: {
-                from: [{ collectionId: 'reminders', allDescendants: true }],
-                where: {
-                    fieldFilter: {
-                        field: { fieldPath: 'isActive' },
-                        op: 'EQUAL',
-                        value: { booleanValue: true }
-                    }
-                }
+                from: [{ collectionId: 'reminders', allDescendants: true }]
             }
         };
 
@@ -111,8 +109,8 @@ export async function GET() {
                 hour12: false,
                 weekday: 'long',
                 year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
+                month: 'numeric',
+                day: 'numeric'
             }).formatToParts(windowTime);
 
             const getP = (type: string) => gTime.find(p => p.type === type)?.value || '';
@@ -125,9 +123,6 @@ export async function GET() {
             checkWindows.push({ day: dGr, time: t, key });
         }
 
-        // Re-use queryBody or simply remove the duplicate const declaration
-        // We already have queryBody defined above at line 90.
-
         const queryResponse = await fetch(firestoreUrl, {
             method: 'POST',
             headers: { 
@@ -139,8 +134,15 @@ export async function GET() {
 
         const queryResults = await queryResponse.json();
         
+        if (queryResults.error) {
+            console.error('[Cron] Firestore query error:', JSON.stringify(queryResults.error));
+            // If it's a missing index error, we'll see it here.
+            // But with no filter, it should work unless collection group queries are disabled.
+            return NextResponse.json({ error: 'Firestore query failed', details: queryResults.error }, { status: 500 });
+        }
+
         if (!Array.isArray(queryResults)) {
-             return NextResponse.json({ success: true, message: 'No reminders found' });
+             return NextResponse.json({ success: true, message: 'No reminders found (empty result)' });
         }
 
         const triggeredResults = [];
@@ -150,6 +152,11 @@ export async function GET() {
             if (!doc) continue;
 
             const fields = doc.fields;
+            
+            // Filter manually in JS to avoid index requirement
+            const isActive = fields.isActive?.booleanValue;
+            if (isActive === false) continue;
+
             const schedules = fields.schedules?.arrayValue?.values || [];
             const lastTriggered = fields.lastTriggered?.stringValue;
             const ownerId = fields.ownerId?.stringValue;
