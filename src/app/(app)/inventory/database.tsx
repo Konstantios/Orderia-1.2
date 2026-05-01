@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/lib/types';
 import { Plus, Camera, ScanLine, X, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // Define BarcodeDetector for TypeScript, as it's still experimental
 interface BarcodeDetector {
@@ -28,7 +29,9 @@ declare global {
 
 function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean, onOpenChange: (open: boolean) => void, onProductAdd: (product: Product) => void }) {
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [manualCode, setManualCode] = useState('');
+  const [primaryCode, setPrimaryCode] = useState<'barcode' | 'manual'>('barcode');
   const [photo, setPhoto] = useState<string | null>(null);
   
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -41,7 +44,9 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
 
   const resetForm = useCallback(() => {
     setName('');
-    setCode('');
+    setBarcode('');
+    setManualCode('');
+    setPrimaryCode('barcode');
     setPhoto(null);
     setIsCameraOpen(false);
   }, []);
@@ -54,7 +59,7 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
   }
 
   const handleBarcodeScanned = useCallback((scannedCode: string) => {
-    setCode(scannedCode);
+    setBarcode(scannedCode);
     setIsCameraOpen(false);
     toast({ title: "Επιτυχής Σάρωση Barcode!", description: `Κωδικός: ${scannedCode}` });
   }, [toast]);
@@ -129,14 +134,19 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
   };
 
   const handleSave = () => {
-    if (!name || !code) {
-      toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Ο τίτλος και ο κωδικός είναι υποχρεωτικοί.' });
+    if (!name || (!barcode && !manualCode)) {
+      toast({ variant: 'destructive', title: 'Ελλιπή Στοιχεία', description: 'Ο τίτλος και τουλάχιστον ένας κωδικός (Barcode ή SKU) είναι υποχρεωτικοί.' });
       return;
     }
+    
+    const finalCode = primaryCode === 'manual' && manualCode ? manualCode : (barcode || manualCode);
+    const finalBarcode = barcode || undefined;
+
     const newProduct: Product = {
       id: `p_${Date.now()}`,
       name,
-      code,
+      code: finalCode,
+      barcode: finalBarcode !== finalCode ? finalBarcode : undefined,
       imageUrl: photo || 'https://picsum.photos/seed/newproduct/400/300',
       imageHint: 'new product',
       unit: 'τεμάχιο', // default
@@ -182,14 +192,35 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
               <Input id="product-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="π.χ. Κατεψυγμένη Πίτσα" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="product-code">Κωδικός / Barcode</Label>
+              <Label htmlFor="product-barcode">Σκαναρισμένος Κωδικός (Barcode)</Label>
               <div className="flex gap-2">
-                <Input id="product-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Σκανάρετε ή πληκτρολογήστε" />
+                <Input id="product-barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Σκανάρετε ή πληκτρολογήστε" />
                 <Button variant="outline" size="icon" onClick={() => openCamera('barcode')}>
                   <ScanLine className="h-5 w-5" />
                 </Button>
               </div>
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="product-manual-code">Χειροκίνητος Κωδικός (SKU) - Προαιρετικό</Label>
+              <Input id="product-manual-code" value={manualCode} onChange={(e) => setManualCode(e.target.value)} placeholder="π.χ. 1001" />
+            </div>
+
+            {(barcode && manualCode) && (
+              <div className="space-y-3 pt-2">
+                <Label>Επιλογή Κύριου Κωδικού</Label>
+                <RadioGroup value={primaryCode} onValueChange={(val: any) => setPrimaryCode(val)} className="flex flex-col space-y-1">
+                  <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-md">
+                    <RadioGroupItem value="barcode" id="r1" />
+                    <Label htmlFor="r1" className="cursor-pointer font-normal flex-1">Χρήση Barcode ({barcode})</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-md">
+                    <RadioGroupItem value="manual" id="r2" />
+                    <Label htmlFor="r2" className="cursor-pointer font-normal flex-1">Χρήση Χειροκίνητου SKU ({manualCode})</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="secondary">Ακύρωση</Button></DialogClose>
@@ -208,40 +239,63 @@ function AddProductDialog({ open, onOpenChange, onProductAdd }: { open: boolean,
               {/* Ambient Darkening Overlay */}
               <div className="absolute inset-0 bg-black/50"></div>
               
-              {/* Futuristic Scanning HUD */}
-              <div className="relative w-11/12 max-w-sm aspect-square bg-transparent rounded-3xl border border-white/20 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
-                  {/* Moving Laser Line */}
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
-                  
-                  {/* Scanner Viewfinder Corners */}
-                  <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                  <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                  <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                  <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                  
-                  {/* Cyberpunk HUD Labels */}
-                  <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
-                     Barcode Capture Active
-                  </div>
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
-                     Align Barcode Here
-                  </div>
+              <div className="relative w-11/12 max-w-sm aspect-square z-10 animate-in zoom-in-95 duration-500">
+                  {/* Close Button Docked to HUD Corner */}
+                  <Button 
+                      onClick={() => setIsCameraOpen(false)} 
+                      variant="ghost" 
+                      size="icon" 
+                      className="absolute -top-3 -right-3 z-[100] bg-white hover:bg-white text-red-600 rounded-full h-10 w-10 shadow-2xl border-2 border-red-500 pointer-events-auto"
+                  >
+                      <X className="h-6 w-6 stroke-[3]" />
+                  </Button>
 
-                  {/* Grid Effect Overlay */}
-                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                  {/* Futuristic Scanning HUD Container */}
+                  <div className="relative w-full h-full bg-transparent rounded-3xl border border-white/20 overflow-hidden ring-4 ring-black/20">
+                      {/* Moving Laser Line */}
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
+                      
+                      {/* Scanner Viewfinder Corners */}
+                      <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                      <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                      <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                      <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                      
+                      {/* Cyberpunk HUD Labels */}
+                      <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
+                         Barcode Capture Active
+                      </div>
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
+                         Align Barcode Here
+                      </div>
+
+                      {/* Grid Effect Overlay */}
+                      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                  </div>
               </div>
             </div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <div className="w-11/12 max-w-sm aspect-square rounded-3xl border-2 border-white/20 relative overflow-hidden">
-                    <div className="absolute inset-0 border-[60px] border-black/20"></div>
+                {/* Photo Mode Frame */}
+                <div className="relative w-11/12 max-w-sm aspect-square z-10">
+                    <Button 
+                        onClick={() => setIsCameraOpen(false)} 
+                        variant="ghost" 
+                        size="icon" 
+                        className="absolute -top-3 -right-3 z-[100] bg-white hover:bg-white text-red-600 rounded-full h-10 w-10 shadow-2xl border-2 border-red-500 pointer-events-auto"
+                    >
+                        <X className="h-6 w-6 stroke-[3]" />
+                    </Button>
+                    <div className="w-full h-full rounded-3xl border-2 border-primary/50 relative overflow-hidden">
+                        <div className="absolute inset-0 border-[40px] border-black/40"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                           <div className="w-full h-px bg-primary/20"></div>
+                           <div className="h-full w-px bg-primary/20 absolute"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
           )}
-
-          <Button onClick={() => setIsCameraOpen(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-[110] bg-black/50 rounded-full h-10 w-10">
-            <X className="h-6 w-6 text-white" />
-          </Button>
           
           {cameraMode === 'photo' && (
              <Button onClick={takePhoto} size="lg" className="absolute bottom-10 z-[110] bg-primary hover:bg-primary/90 text-white font-bold h-14 px-8 rounded-2xl shadow-xl shadow-primary/20">

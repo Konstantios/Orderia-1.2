@@ -60,30 +60,30 @@ export default function OrderDetailsPage() {
         const exportData = order.items.map(item => {
             const product = products.find(p => p.id === item.productId);
             return {
-                'ID Παραγγελίας': order.id,
-                'Πελάτης': order.customerName,
-                'Ημερομηνία Παραγγελίας': orderDate.toLocaleString('el-GR'),
-                'Κατάσταση': order.status,
-                'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder for demo
                 'Κωδικός Προϊόντος': product?.code || '-',
                 'Προϊόν': product?.name || 'Άγνωστο',
                 'Ποσότητα': item.quantity,
+                'Ημερομηνία Παραγγελίας': orderDate.toLocaleString('el-GR'),
+                'Πελάτης': order.customerName,
                 'Μονάδα': product?.unit || '-',
+                'ID Παραγγελίας': order.id,
+                'Κατάσταση': order.status,
+                'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder for demo
                 'Σημειώσεις Πελάτη': order.notes || '-',
             };
         });
         
         if (exportData.length === 0) {
              exportData.push({
-                'ID Παραγγελίας': order.id,
-                'Πελάτης': order.customerName,
-                'Ημερομηνία Παραγγελίας': orderDate.toLocaleString('el-GR'),
-                'Κατάσταση': order.status,
-                'Τηλέφωνο Υπευθύνου': '6900000000',
                 'Κωδικός Προϊόντος': '-',
                 'Προϊόν': '-',
                 'Ποσότητα': 0,
+                'Ημερομηνία Παραγγελίας': orderDate.toLocaleString('el-GR'),
+                'Πελάτης': order.customerName,
                 'Μονάδα': '-',
+                'ID Παραγγελίας': order.id,
+                'Κατάσταση': order.status,
+                'Τηλέφωνο Υπευθύνου': '6900000000',
                 'Σημειώσεις Πελάτη': order.notes || '-',
              })
         }

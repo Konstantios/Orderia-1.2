@@ -9,8 +9,9 @@ import { useRouter } from 'next/navigation';
 import { useFirebase, useCollection, useMemoFirebase, type WithId } from '@/firebase';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, AlarmClock } from 'lucide-react';
 import type { Store, CustomerInventoryItem, StoreProductConfiguration, Product } from '@/lib/types';
+import { ReminderDialog } from '@/components/reminders/reminder-dialog';
 
 
 const menuItems = [
@@ -27,6 +28,14 @@ const menuItems = [
     href: '/inventory',
     icon: Package,
     color: 'text-primary',
+  },
+  {
+    title: 'Υπενθύμιση Παραγγελίας',
+    description: 'Ορίστε ημέρες και ώρες ειδοποίησης',
+    href: '#',
+    isReminderTrigger: true,
+    icon: AlarmClock,
+    color: 'text-yellow-400',
   },
   {
     title: 'Προτεινόμενη Παραγγελία',
@@ -51,7 +60,7 @@ const menuItems = [
   },
   {
     title: 'Ειδοποιήσεις',
-    description: '7 μη αναγνωσμένα μηνύματα',
+    description: 'Δείτε μηνύματα προμηθευτών',
     href: '/notifications',
     icon: Bell,
     color: 'text-red-400',
@@ -64,6 +73,7 @@ export default function DashboardPage() {
 
   const [storeName, setStoreName] = useState('Φόρτωση...');
   const [store, setStore] = useState<WithId<Store> | null>(null);
+  const [isReminderDialogOpen, setIsReminderDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user && firestore) {
@@ -210,9 +220,9 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {menuItems.map((item) => (
-          <Link href={item.href} key={item.title}>
-            <Card className="group h-full transform-gpu transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/20">
+        {menuItems.map((item) => {
+          const content = (
+            <Card className="group h-full transform-gpu transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/20 cursor-pointer">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="font-headline text-lg font-medium">{item.title}</CardTitle>
                 <item.icon className={`h-6 w-6 ${item.color} transition-transform group-hover:scale-110`} />
@@ -221,9 +231,32 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">{item.description}</p>
               </div>
             </Card>
-          </Link>
-        ))}
+          );
+
+          if ((item as any).isReminderTrigger) {
+            return (
+              <div key={item.title} onClick={() => setIsReminderDialogOpen(true)}>
+                {content}
+              </div>
+            );
+          }
+
+          return (
+            <Link href={item.href} key={item.title}>
+              {content}
+            </Link>
+          );
+        })}
       </div>
+
+      {store && (
+        <ReminderDialog 
+          isOpen={isReminderDialogOpen} 
+          onOpenChange={setIsReminderDialogOpen} 
+          storeId={store.id} 
+          businessName={storeName}
+        />
+      )}
     </div>
   );
 }

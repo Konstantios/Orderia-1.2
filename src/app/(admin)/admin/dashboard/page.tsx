@@ -250,12 +250,34 @@ export default function AdminDashboardPage() {
   }, [wholesaler, firestore]);
   const { data: realProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
 
-  const { todayOrders, pendingOrders } = useMemo(() => {
-    if (!orders) return { todayOrders: 0, pendingOrders: 0 };
-    const todayOrdersCount = orders.filter(o => isToday((o.date as unknown as Timestamp).toDate())).length;
-    const pendingOrdersCount = orders.filter(o => o.status === 'Εκκρεμής').length;
-    return { todayOrders: todayOrdersCount, pendingOrders: pendingOrdersCount };
-  }, [orders]);
+  const { todayOrders, pendingOrders, todayOrdersList, pendingOrdersList } = useMemo(() => {
+    if (!orders) return { todayOrders: 0, pendingOrders: 0, todayOrdersList: [], pendingOrdersList: [] };
+    
+    const today = orders.filter(o => isToday((o.date as unknown as Timestamp).toDate()));
+    const pending = orders.filter(o => o.status === 'Εκκρεμής');
+    
+    const todayList = today
+        .map(order => {
+            const totals: Record<string, number> = {};
+            order.items.forEach(item => {
+                const product = realProducts?.find(p => p.id === item.productId);
+                const unit = product?.unit || 'τεμάχιο';
+                totals[unit] = (totals[unit] || 0) + item.quantity;
+            });
+            return { ...order, totals };
+        })
+        .sort((a, b) => (b.date as unknown as Timestamp).toDate().getTime() - (a.date as unknown as Timestamp).toDate().getTime());
+
+    const pendingList = pending
+        .sort((a, b) => (b.date as unknown as Timestamp).toDate().getTime() - (a.date as unknown as Timestamp).toDate().getTime());
+
+    return { 
+        todayOrders: today.length, 
+        pendingOrders: pending.length,
+        todayOrdersList: todayList,
+        pendingOrdersList: pendingList
+    };
+  }, [orders, realProducts]);
 
   const salesData = useMemo(() => {
     const getOrderTotalItems = (order: Order) => order.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -408,6 +430,33 @@ export default function AdminDashboardPage() {
   }, [orders, wholesaler]);
 
 
+  const stockVisualData = useMemo(() => {
+    if (!stock || !realProducts || realProducts.length === 0) return [];
+    return stock
+    .map(stockItem => {
+        const product = realProducts.find(p => p.id === stockItem.id) 
+            || realProducts.find(p => p.id === stockItem.productId);
+        if (!product) return null;
+        
+        const { quantity, idealStock } = stockItem;
+        const percentage = idealStock > 0 ? (quantity / idealStock) * 100 : 0;
+        
+        let colorClass = 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]';
+        if (percentage < 40) colorClass = 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]';
+        else if (percentage < 80) colorClass = 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)]';
+        
+        return {
+            ...product,
+            currentStock: quantity,
+            idealStock,
+            percentage: Math.min(100, percentage),
+            colorClass: colorClass
+        };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a,b) => a.percentage - b.percentage);
+  }, [stock, realProducts]);
+
   const lowStockItems = useMemo(() => {
     if (!stock || !realProducts || realProducts.length === 0) return [];
     return stock
@@ -477,22 +526,84 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         {/* Left Column */}
         <div className="lg:col-span-1 space-y-6">
-            <Card>
+            <Card 
+              className="cursor-pointer transition-all hover:bg-muted/50 active:scale-[0.99] group"
+              onClick={() => router.push('/admin/orders')}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Σημερινές Παραγγελίες</CardTitle>
-                <Icons.newOrder className="h-4 w-4 text-muted-foreground" />
+                <Icons.newOrder className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </CardHeader>
-              <CardContent>
-                {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{todayOrders}</div>}
+              <CardContent className="space-y-4">
+                {isLoadingOrders ? (
+                  <Loader2 className="h-6 w-6 animate-spin"/>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{todayOrders}</div>
+                    {todayOrdersList.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t max-h-48 overflow-y-auto no-scrollbar">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground sticky top-0 bg-card py-1">Αναλυτικά:</p>
+                        {todayOrdersList.map(order => (
+                          <div 
+                            key={order.id} 
+                            className="flex flex-col gap-0.5 text-xs p-1.5 rounded hover:bg-primary/5 transition-colors cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/orders/${order.id}`);
+                            }}
+                          >
+                            <span className="font-semibold text-foreground truncate">{order.customerName}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(order.totals).map(([unit, total]) => (
+                                <span key={unit} className="bg-primary/5 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                  {total} {unit}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
-             <Card>
+             <Card 
+              className="cursor-pointer transition-all hover:bg-muted/50 active:scale-[0.99] group"
+              onClick={() => router.push('/admin/orders')}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Εκκρεμείς Παραγγελίες</CardTitle>
-                <Icons.history className="h-4 w-4 text-muted-foreground" />
+                <Icons.history className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </CardHeader>
-              <CardContent>
-                {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin"/> : <div className="text-2xl font-bold">{pendingOrders}</div>}
+              <CardContent className="space-y-4">
+                {isLoadingOrders ? (
+                  <Loader2 className="h-6 w-6 animate-spin"/>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{pendingOrders}</div>
+                    {pendingOrdersList.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t max-h-48 overflow-y-auto no-scrollbar">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground sticky top-0 bg-card py-1">Πελάτες:</p>
+                        {pendingOrdersList.map(order => (
+                          <div 
+                            key={order.id} 
+                            className="flex items-center justify-between text-xs p-1.5 rounded hover:bg-primary/5 transition-colors cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/admin/orders/${order.id}`);
+                            }}
+                          >
+                            <span className="font-semibold text-foreground truncate">{order.customerName}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {format((order.date as unknown as Timestamp).toDate(), 'HH:mm')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           
@@ -563,6 +674,41 @@ export default function AdminDashboardPage() {
                     </Accordion>
                 ) : (
                     <p className="text-center text-sm text-muted-foreground py-4">Δεν υπάρχουν σημειώσεις.</p>
+                )}
+            </CardContent>
+          </Card>
+           <Card className="border-primary/10">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Icons.warehouse className="h-5 w-5 text-primary" />
+                    <span>Κατάσταση Αποθήκης</span>
+                </CardTitle>
+                <CardDescription>
+                    Οπτική απεικόνιση αποθέματος ανά προϊόν.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoadingStock ? (
+                     <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin"/></div>
+                ) : stockVisualData.length > 0 ? (
+                    <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 no-scrollbar">
+                        {stockVisualData.map(item => (
+                            <div key={item.id} className="space-y-1.5 group">
+                                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
+                                    <span className="truncate max-w-[150px] sm:max-w-[200px]">{item.name}</span>
+                                    <span className="tabular-nums">{item.currentStock} / {item.idealStock} {item.unit}</span>
+                                </div>
+                                <div className="h-2.5 w-full bg-muted/50 rounded-full overflow-hidden border border-white/5 p-[1px]">
+                                    <div 
+                                        className={cn("h-full transition-all duration-700 ease-out rounded-full", item.colorClass)}
+                                        style={{ width: `${item.percentage}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-sm text-muted-foreground py-4">Δεν υπάρχουν δεδομένα αποθέματος.</p>
                 )}
             </CardContent>
           </Card>

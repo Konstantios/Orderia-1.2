@@ -40,7 +40,7 @@ async function getAccessToken(clientEmail: string, privateKey: string) {
 
 export async function POST(request: Request) {
     try {
-        const { recipientUid, title, body } = await request.json();
+        const { recipientUid, title, body, link } = await request.json();
 
         if (!recipientUid) {
             return NextResponse.json({ error: 'Missing recipientUid' }, { status: 400 });
@@ -58,19 +58,8 @@ export async function POST(request: Request) {
         // 1. Get Access Token
         const accessToken = await getAccessToken(clientEmail, privateKey);
 
-        // 2. Fetch FCM Tokens from Firestore (we can't easily use firestore SDK in API route WITHOUT firebase-admin 
-        // if we want to bypass the 50 docs limit and complex rules, but since this is a Next.js route, 
-        // we should ideally use the REST API for Firestore too or check if we can use the regular firebase SDK).
-        
-        // Actually, let's use the FCM tokens collection from Firestore. 
-        // Since we are on the server, we can use the Firestore REST API to get tokens.
-        
+        // 2. Fetch FCM Tokens from Firestore
         const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectID}/databases/(default)/documents/fcmTokens`;
-        // Note: This requires the Firestore to be accessible or use the same access token.
-        
-        const tokensResponse = await fetch(`${firestoreUrl}?mask.fieldPaths=token&where.fieldFilter.field.fieldPath=userId&where.fieldFilter.op=EQUAL&where.fieldFilter.value.stringValue=${recipientUid}`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
         
         // Simplified approach for now: Get tokens via a simpler list call and filter
         const listResponse = await fetch(firestoreUrl, {
@@ -94,9 +83,10 @@ export async function POST(request: Request) {
                 message: {
                     token,
                     notification: { title, body },
+                    data: { link: link || '/orders/new' },
                     webpush: {
                         fcm_options: {
-                            link: '/orders/new'
+                            link: link || '/orders/new'
                         }
                     }
                 }

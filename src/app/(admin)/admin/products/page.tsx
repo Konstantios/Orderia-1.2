@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -29,7 +29,9 @@ import { useFirebase, useCollection, useMemoFirebase, addDocumentNonBlocking, up
 import { collection, query, where, doc, limit, writeBatch } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import Image from 'next/image';
-import { Scan, Camera, Upload, Check, X, FileSpreadsheet } from 'lucide-react';
+import { Scan, Camera, Upload, Check, X, FileSpreadsheet, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // Define BarcodeDetector for TypeScript
 interface BarcodeDetector {
@@ -44,7 +46,15 @@ declare global {
 }
 
 const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Partial<WithId<Product>> | null; wholesaler: WithId<Wholesaler>; onSave: (productData: Omit<Product, 'id' | 'wholesalerOwnerId' | 'wholesalerAdminUids'>) => void; onCancel: () => void }) => {
+    const initialBarcode = product?.barcode || product?.code || '';
+    const initialManualCode = product?.barcode && product?.code !== product?.barcode ? product?.code : '';
+    const initialPrimary = initialManualCode ? 'manual' : 'barcode';
+
     const [formData, setFormData] = useState<Partial<Product>>(product || { unit: 'τεμάχιο'});
+    const [barcode, setBarcode] = useState(initialBarcode);
+    const [manualCode, setManualCode] = useState(initialManualCode);
+    const [primaryCode, setPrimaryCode] = useState<'barcode' | 'manual'>(initialPrimary);
+    
     const [isScanning, setIsScanning] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const { toast } = useToast();
@@ -142,11 +152,11 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                             isDetecting = true;
                             const barcodes = await barcodeDetector.detect(videoRef.current);
                             if (barcodes.length > 0 && barcodes[0].rawValue) {
-                                const code = barcodes[0].rawValue;
+                                const scannedCode = barcodes[0].rawValue;
                                 playBeep();
-                                setFormData(prev => ({...prev, code}));
+                                setBarcode(scannedCode);
                                 setIsScanning(false);
-                                toast({ title: "Barcode Σκαναρίστηκε", description: `Κωδικός: ${code}` });
+                                toast({ title: "Barcode Σκαναρίστηκε", description: `Κωδικός: ${scannedCode}` });
                             }
                         } catch (e) {
                             // ignore
@@ -175,7 +185,7 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
     }
 
     const handleSubmit = () => {
-        if (!formData.name || !formData.code || !formData.unit) {
+        if (!formData.name || (!barcode && !manualCode) || !formData.unit) {
             toast({
                 variant: 'destructive',
                 title: 'Ελλιπή Στοιχεία',
@@ -184,9 +194,13 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
             return;
         }
 
+        const finalCode = primaryCode === 'manual' && manualCode ? manualCode : (barcode || manualCode);
+        const finalBarcode = barcode || undefined;
+
         const productToSave: Omit<Product, 'id' | 'wholesalerOwnerId' | 'wholesalerAdminUids'> & { wholesalerId: string; wholesalerOwnerId: string; wholesalerAdminUids: string[]; } = {
             name: formData.name,
-            code: formData.code,
+            code: finalCode,
+            barcode: finalBarcode !== finalCode ? finalBarcode : undefined,
             unit: formData.unit,
             imageUrl: formData.imageUrl || `https://picsum.photos/seed/${formData.code}/400/300`,
             imageHint: formData.name.toLowerCase(),
@@ -217,32 +231,41 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                             <div className="absolute inset-0 bg-black/50"></div>
                             
                             {/* Futuristic Scanning HUD */}
-                            <div className="relative w-11/12 max-w-sm aspect-square bg-transparent rounded-3xl border border-white/20 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
-                                {/* Moving Laser Line */}
-                                <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
-                                
-                                {/* Scanner Viewfinder Corners */}
-                                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                                
-                                {/* Cyberpunk HUD Labels */}
-                                <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
-                                   Product ID Scanner Active
-                                </div>
-                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
-                                   Align Barcode to Registry
-                                </div>
+                            <div className="relative w-11/12 max-w-sm aspect-square z-10 animate-in zoom-in-95 duration-500">
+                                {/* Close Button Docked to HUD Corner */}
+                                <Button 
+                                    onClick={() => setIsScanning(false)} 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="absolute -top-3 -right-3 z-[100] bg-white hover:bg-white text-red-600 rounded-full h-10 w-10 shadow-2xl border-2 border-red-500 pointer-events-auto"
+                                >
+                                    <X className="h-6 w-6 stroke-[3]" />
+                                </Button>
 
-                                {/* Grid Effect Overlay */}
-                                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                                {/* Futuristic Scanning HUD Container */}
+                                <div className="relative w-full h-full bg-transparent rounded-3xl border border-white/20 overflow-hidden ring-4 ring-black/20">
+                                    {/* Moving Laser Line */}
+                                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
+                                    
+                                    {/* Scanner Viewfinder Corners */}
+                                    <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                    <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                    <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                    <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                                    
+                                    {/* Cyberpunk HUD Labels */}
+                                    <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
+                                       Product ID Scanner Active
+                                    </div>
+                                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
+                                       Align Barcode to Registry
+                                    </div>
+
+                                    {/* Grid Effect Overlay */}
+                                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                                </div>
                             </div>
                         </div>
-
-                        <Button onClick={() => setIsScanning(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-[110] bg-black/50 rounded-full h-10 w-10">
-                            <X className="h-6 w-6 text-white" />
-                        </Button>
                     </div>
                 )}
                  <div className="grid grid-cols-4 items-center gap-4">
@@ -250,14 +273,34 @@ const ProductForm = ({ product, wholesaler, onSave, onCancel }: { product: Parti
                     <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} className="col-span-3" />
                 </div>
                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="code" className="text-right">Κωδικός</Label>
+                    <Label htmlFor="barcode" className="text-right leading-tight">Σκαναρισμένος Κωδικός (Barcode)</Label>
                     <div className="col-span-3 flex gap-2">
-                        <Input id="code" name="code" value={formData.code || ''} onChange={handleChange} className="flex-1" />
+                        <Input id="barcode" name="barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} className="flex-1" />
                         <Button variant="outline" size="icon" onClick={handleStartScan} title="Σκανάρισμα Barcode">
                             <Scan className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="manualCode" className="text-right leading-tight">Χειροκίνητος Κωδικός (SKU)</Label>
+                    <Input id="manualCode" name="manualCode" value={manualCode} onChange={(e) => setManualCode(e.target.value)} className="col-span-3" placeholder="Προαιρετικό, π.χ. 1001" />
+                </div>
+                
+                {(barcode && manualCode) && (
+                    <div className="grid grid-cols-4 items-start gap-4 pt-2">
+                        <Label className="text-right leading-tight pt-2">Επιλογή Κύριου</Label>
+                        <RadioGroup value={primaryCode} onValueChange={(val: any) => setPrimaryCode(val)} className="col-span-3 flex flex-col space-y-1">
+                          <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-md">
+                            <RadioGroupItem value="barcode" id="r1" />
+                            <Label htmlFor="r1" className="cursor-pointer font-normal flex-1">Χρήση Barcode ({barcode})</Label>
+                          </div>
+                          <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-md">
+                            <RadioGroupItem value="manual" id="r2" />
+                            <Label htmlFor="r2" className="cursor-pointer font-normal flex-1">Χρήση Χειροκίνητου SKU ({manualCode})</Label>
+                          </div>
+                        </RadioGroup>
+                    </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="unit" className="text-right">Μονάδα</Label>
                     <Select onValueChange={handleSelectChange} defaultValue={formData.unit}>
@@ -447,6 +490,22 @@ export default function AdminProductsPage() {
         }
     };
 
+    const handleExportExcel = () => {
+        if (!products || products.length === 0) return;
+        
+        const exportData = products.map(p => ({
+            'Κωδικός': p.code || '',
+            'Τίτλος': p.name || '',
+            'Μονάδα': p.unit || '',
+            'Τεμάχια ανά Κιβώτιο': p.piecesPerBox || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Προϊόντα");
+        XLSX.writeFile(wb, "products_export.xlsx");
+    };
+
     return (
         <div>
             <div className="flex items-center justify-between mb-6">
@@ -454,17 +513,21 @@ export default function AdminProductsPage() {
             </div>
 
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <CardTitle>Λίστα Προϊόντων</CardTitle>
                         <CardDescription>
                             Διαχειριστείτε τα προϊόντα που προσφέρετε.
                         </CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" className="relative" disabled={!wholesaler}>
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <Button variant="outline" size="sm" onClick={handleExportExcel} disabled={!products || products.length === 0} className="flex-1 sm:flex-initial">
+                            <Download className="mr-2 h-4 w-4" />
+                            Εξαγωγή
+                        </Button>
+                        <Button variant="outline" size="sm" className="relative flex-1 sm:flex-initial" disabled={!wholesaler}>
                             <FileSpreadsheet className="mr-2 h-4 w-4" />
-                            Εισαγωγή Excel
+                            Εισαγωγή
                             <input
                                 type="file"
                                 className="absolute inset-0 opacity-0 cursor-pointer"
@@ -473,14 +536,15 @@ export default function AdminProductsPage() {
                                 disabled={!wholesaler}
                             />
                         </Button>
-                        <Button onClick={openDialogForNew} disabled={!wholesaler}>
+                        <Button size="sm" onClick={openDialogForNew} disabled={!wholesaler} className="w-full sm:w-auto">
                             <PlusCircle className="mr-2 h-4 w-4" />
-                            Προσθήκη Προϊόντος
+                            Προσθήκη
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent>
-                   <Table>
+                <CardContent className="p-0 sm:p-6">
+                   <div className="overflow-x-auto">
+                    <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[80px]">Εικόνα</TableHead>
@@ -534,6 +598,7 @@ export default function AdminProductsPage() {
                             )}
                         </TableBody>
                    </Table>
+                   </div>
                 </CardContent>
             </Card>
 

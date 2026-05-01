@@ -31,6 +31,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [logoUrl, setLogoUrl] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [indexErrorLink, setIndexErrorLink] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [scrollContainerRef] = useState(() => ({ current: null as HTMLDivElement | null }));
   const { toast } = useToast();
   const lastNotifId = useRef<string | null>(null);
@@ -69,6 +70,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     const notifQuery = query(
       collection(firestore, 'notifications'),
+      where('recipientUid', '==', user.uid),
+      orderBy('createdAt', 'desc'),
       limit(1)
     );
 
@@ -128,9 +131,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 return;
             }
 
+            // Register service worker manually to avoid registration timeout
+            const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
             // Get token
             const token = await getToken(messaging, {
-                vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY
+                vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+                serviceWorkerRegistration: registration
             });
 
             if (token) {
@@ -217,7 +224,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:px-6 md:pt-6"
       >
         <PullToRefresh rootRef={scrollContainerRef}>
-          <div className="pb-[calc(2rem+env(safe-area-inset-bottom))]">
+          <div className="pb-24 sm:pb-8">
             {indexErrorLink && (
                 <Card className="mb-4 border-red-500 bg-red-500/10 mx-1">
                     <CardHeader className="p-3 pb-2">
@@ -244,24 +251,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </PullToRefresh>
       </main>
 
-      <nav className="z-20 shrink-0 border-t bg-background/98 backdrop-blur-md pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 shrink-0 border-t bg-background/98 backdrop-blur-md pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <div className="grid h-16 grid-cols-5 items-center justify-items-center">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={label}
-              href={href}
-              className={cn(
-                'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
-                pathname === href || (href !== '/' && pathname.startsWith(href)) ? 'text-primary' : 'text-muted-foreground'
-              )}
-            >
-              <Icon className={cn(
-                "h-6 w-6 transition-transform",
-                (pathname === href || (href !== '/' && pathname.startsWith(href))) && "scale-110"
-              )} />
-              <span className="leading-none">{label}</span>
-            </Link>
-          ))}
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const isActive = activeTab === href || (activeTab === null && (pathname === href || (href !== '/' && pathname.startsWith(href))));
+            return (
+              <Link
+                key={label}
+                href={href}
+                onClick={() => setActiveTab(href)}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors w-full h-full',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <Icon className={cn(
+                  "h-6 w-6 transition-transform",
+                  isActive && "scale-110"
+                )} />
+                <span className="leading-none">{label}</span>
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

@@ -10,22 +10,35 @@ import { Bell, BellOff, CheckCheck, Trash2, Loader2, Calendar } from 'lucide-rea
 import { format } from 'date-fns';
 import { el } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import type { Notification } from '@/lib/types';
+import { useEffect, useRef } from 'react';
 
 export default function NotificationsPage() {
   const { user, firestore } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('id');
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [isAcknowledging, setIsAcknowledging] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (highlightId) {
+      const element = document.getElementById(`notification-${highlightId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [highlightId, notifications]); // dependencies might need to include notifications if they load later
 
   const notificationsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
       collection(firestore, 'notifications'),
-      where('recipientUid', '==', user.uid)
+      where('recipientUid', '==', user.uid),
+      orderBy('createdAt', 'desc')
     );
   }, [user, firestore]);
 
@@ -41,16 +54,24 @@ export default function NotificationsPage() {
   };
 
   const handleMarkAllAsRead = async () => {
-    if (!firestore || !notifications) return;
+    if (!firestore || !user || !notifications) return;
     const unread = notifications.filter(n => !n.read);
     if (unread.length === 0) return;
 
     setIsMarkingAll(true);
     try {
       const batch = writeBatch(firestore);
+      
+      // Group by wholesaler to minimize lookups if we were sending notifications back
+      // For simplicity in bulk, we just mark as acknowledged and read
       unread.forEach(n => {
-        batch.update(doc(firestore, 'notifications', n.id), { read: true });
+        const updateData: any = { read: true };
+        if (n.type === 'custom_message' && !(n as any).acknowledgedAt) {
+          updateData.acknowledgedAt = serverTimestamp();
+        }
+        batch.update(doc(firestore, 'notifications', n.id), updateData);
       });
+      
       await batch.commit();
       toast({ title: 'Επιτυχία', description: 'Όλες οι ειδοποιήσεις σημειώθηκαν ως αναγνωσμένες.' });
     } catch (error) {
@@ -167,16 +188,20 @@ export default function NotificationsPage() {
         {notifications && notifications.length > 0 ? (
           notifications.map((notification) => (
             <Card 
-                key={notification.id} 
+                key={notification.id}
+                id={`notification-${notification.id}`}
                 className={cn(
                     "transition-all border-l-4 cursor-pointer hover:shadow-md hover:bg-accent/5",
+                    highlightId === notification.id ? "ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse" : "",
                     notification.read 
                         ? "bg-background border-l-muted opacity-80" 
                         : "bg-primary/5 border-l-primary shadow-sm"
                 )}
                 onClick={() => {
                   if (!notification.read) handleMarkAsRead(notification.id);
-                  router.push('/orders/new');
+                  if (notification.type !== 'custom_message') {
+                      router.push('/orders/new');
+                  }
                 }}
             >
               <CardContent className="p-4 sm:p-6">
@@ -202,23 +227,23 @@ export default function NotificationsPage() {
                     <p className="text-sm text-foreground/80 leading-relaxed">
                       {notification.description}
                     </p>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1 font-medium text-primary/80">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-primary/5 mt-2">
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1 font-bold text-primary/80 bg-primary/5 px-2 py-0.5 rounded-md">
                           {notification.wholesalerName}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {notification.createdAt ? format(notification.createdAt.toDate(), 'eeee, d MMMM HH:mm', { locale: el }) : 'Μόλις τώρα'}
+                          {notification.createdAt ? format(notification.createdAt.toDate(), 'eee, d MMM HH:mm', { locale: el }) : 'Μόλις τώρα'}
                         </span>
                       </div>
                       {!notification.read && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {notification.type === 'custom_message' && !(notification as any).acknowledgedAt && (
                                 <Button 
                                     variant="default" 
                                     size="sm" 
-                                    className="h-8 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm gap-2"
+                                    className="h-8 px-4 text-[11px] font-bold rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm gap-2"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleAcknowledge(notification as any);
@@ -236,7 +261,7 @@ export default function NotificationsPage() {
                             <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary transition-colors"
+                                className="h-8 px-3 text-[11px] font-medium hover:bg-primary/10 hover:text-primary transition-colors rounded-xl"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleMarkAsRead(notification.id);
@@ -247,7 +272,7 @@ export default function NotificationsPage() {
                         </div>
                       )}
                       {(notification as any).acknowledgedAt && (
-                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1.5 py-1 px-3">
+                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 gap-1.5 py-1 px-3 text-[10px] rounded-lg">
                               <CheckCheck className="h-3 w-3" />
                               Ενημερώθηκα
                           </Badge>

@@ -1,6 +1,7 @@
 export interface Product {
   id: string;
   code: string;
+  barcode?: string;
   name: string;
   imageUrl: string;
   imageHint: string;
@@ -32,7 +33,7 @@ export interface Store {
     email: string;
     address: string;
     googleMapsLink?: string;
-    deliveryDay: string;
+    deliveryDay: string; // Can be a single day or multiple comma-separated days (e.g. "Δευτέρα, Τρίτη")
     ownerId?: string;
     managerUids?: string[];
     logoUrl?: string;
@@ -54,9 +55,21 @@ export interface Wholesaler {
     ownerId: string;
     ownerName: string;
     adminUids: string[];
+    roles?: Record<string, string>;
     taxId: string;
     description?: string;
     logoUrl?: string;
+    parentWholesalerId?: string;
+    parentWholesalerName?: string;
+}
+
+export interface WholesalerProductConfiguration {
+    wholesalerId: string;
+    productId: string;
+    parentWholesalerId: string;
+    idealStock: number;
+    ownerId: string;
+    adminUids: string[];
 }
 
 export interface CustomerInventoryItem {
@@ -162,4 +175,17 @@ export interface JoinRequest {
   requesterEmail: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
+}
+export interface ReminderSchedule {
+  day: string; // e.g., "Δευτέρα"
+  time: string; // e.g., "09:00"
+}
+
+export interface OrderReminder {
+  id: string;
+  schedules: ReminderSchedule[];
+  isActive: boolean;
+  storeId: string;
+  ownerId: string;
+  lastTriggered?: string; // To avoid multiple triggers in the same minute (e.g. "2026-05-01T09:00")
 }

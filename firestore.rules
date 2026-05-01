@@ -56,12 +56,22 @@ service cloud.firestore {
     }
 
     match /wholesalers/{wholesalerId} {
-      allow get: if isWholesalerMember(resource.data);
+      allow get: if isWholesalerMember(resource.data) || 
+                   (isSignedIn() && resource.data.parentWholesalerId is string && isWholesalerMemberById(resource.data.parentWholesalerId));
       allow list: if true; // Public: allows unauthenticated AFM search on login page
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingWholesalerMember(resource.data) || 
                    (isSignedIn() && resource.data.email == request.auth.token.email);
       allow delete: if isExistingWholesalerMember(resource.data);
+
+      match /productConfigurations/{configId} {
+        allow read: if isWholesalerMemberById(wholesalerId) || 
+                       (isSignedIn() && get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data.parentWholesalerId is string && 
+                        isWholesalerMemberById(get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data.parentWholesalerId));
+        allow write: if isWholesalerMemberById(wholesalerId) || 
+                        (isSignedIn() && get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data.parentWholesalerId is string && 
+                         isWholesalerMemberById(get(/databases/$(database)/documents/wholesalers/$(wholesalerId)).data.parentWholesalerId));
+      }
 
       match /products/{productId} {
         allow read: if isSignedIn();
@@ -148,12 +158,14 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
     }
     
     match /fcmTokens/{tokenId} {
-      allow read, write: if isSignedIn() && request.auth.uid == data.userId;
-      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      allow read, write: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
   }
 }

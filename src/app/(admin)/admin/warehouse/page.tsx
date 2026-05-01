@@ -12,9 +12,10 @@ import { AdminWarehouseDatabase } from './database';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { WholesalerStockItem, Warehouse, Wholesaler, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Download, PlusCircle, Loader2, Minus, Plus, Package } from 'lucide-react';
+import { Download, PlusCircle, Loader2, Minus, Plus, Package, LayoutGrid, List } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -46,6 +47,7 @@ export default function AdminWarehousePage() {
     const [activeTab, setActiveTab] = useState<string | null>(null);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [newWarehouseName, setNewWarehouseName] = useState('');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     
     const { toast } = useToast();
     const firestore = useFirestore();
@@ -224,8 +226,8 @@ export default function AdminWarehousePage() {
             const idealStock = stockItem?.idealStock || 0;
             const suggestion = Math.max(0, idealStock - currentStock);
             return {
-                'Κωδικός Προϊόντος': product.code,
-                'Όνομα': product.name,
+                'Κωδικός': product.code,
+                'Τίτλος': product.name,
                 'Απόθεμα': currentStock,
                 'Ιδανικό': idealStock,
                 'Προτεινόμενο': suggestion
@@ -276,17 +278,17 @@ export default function AdminWarehousePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="font-headline text-3xl font-bold">Διαχείριση Αποθηκών</h1>
-                 <Button onClick={() => setIsAddDialogOpen(true)} variant="outline">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <h1 className="font-headline text-2xl sm:text-3xl font-bold">Διαχείριση Αποθηκών</h1>
+                 <Button onClick={() => setIsAddDialogOpen(true)} variant="outline" className="w-full sm:w-auto">
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Προσθήκη Αποθήκης
                 </Button>
             </div>
             <Tabs value={activeTab || 'loading'} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid h-auto grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap lg:h-auto lg:justify-start">
+                <TabsList className="flex w-full overflow-x-auto justify-start h-auto p-1 bg-muted/50 no-scrollbar">
                     {warehouses && warehouses.map(wh => (
-                        <TabsTrigger key={wh.id} value={wh.id}>{wh.name}</TabsTrigger>
+                        <TabsTrigger key={wh.id} value={wh.id} className="flex-shrink-0 px-4 py-2">{wh.name}</TabsTrigger>
                     ))}
                     {isLoadingUserWarehouses && <div className="flex items-center px-4"><Loader2 className="h-4 w-4 animate-spin" /></div>}
                 </TabsList>
@@ -302,15 +304,15 @@ export default function AdminWarehousePage() {
                             const warehouse = warehouses.find(w => w.id === activeTab)!;
                             return (
                                 <Tabs defaultValue="stock" className="w-full">
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
-                                        <TabsList className="flex-wrap h-auto">
-                                            <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
-                                            <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
-                                            <TabsTrigger value="in">Είσοδος</TabsTrigger>
-                                            <TabsTrigger value="out">Έξοδος</TabsTrigger>
-                                            <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
+                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+                                        <TabsList className="flex w-full md:w-auto overflow-x-auto justify-start h-auto p-1 bg-muted/50 no-scrollbar">
+                                            <TabsTrigger value="stock" className="flex-shrink-0">Απόθεμα</TabsTrigger>
+                                            <TabsTrigger value="counting" className="flex-shrink-0">Καταμέτρηση</TabsTrigger>
+                                            <TabsTrigger value="in" className="flex-shrink-0">Είσοδος</TabsTrigger>
+                                            <TabsTrigger value="out" className="flex-shrink-0">Έξοδος</TabsTrigger>
+                                            <TabsTrigger value="database" className="flex-shrink-0">Βάση Σάρωσης</TabsTrigger>
                                         </TabsList>
-                                        <Button onClick={() => handleExport(warehouse)} variant="outline">
+                                        <Button onClick={() => handleExport(warehouse)} variant="outline" className="w-full md:w-auto">
                                             <Download className="mr-2 h-4 w-4" />
                                             Εξαγωγή {warehouse.name}
                                         </Button>
@@ -318,13 +320,23 @@ export default function AdminWarehousePage() {
                                     <TabsContent value="stock">
                                         <div className="space-y-4">
                                             <Card>
-                                                <CardHeader>
-                                                    <CardTitle>Απόθεμα - {warehouse.name}</CardTitle>
-                                                    <CardDescription>Επισκόπηση του αποθέματος για όλα τα προϊόντα σε αυτή την αποθήκη.</CardDescription>
+                                                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                    <div>
+                                                        <CardTitle>Απόθεμα - {warehouse.name}</CardTitle>
+                                                        <CardDescription>Επισκόπηση του αποθέματος για όλα τα προϊόντα σε αυτή την αποθήκη.</CardDescription>
+                                                    </div>
+                                                    <div className="flex border rounded-md self-end sm:self-auto">
+                                                        <Button variant={viewMode === 'grid' ? "secondary" : "ghost"} size="icon" onClick={() => setViewMode('grid')} className="rounded-r-none h-8 w-8">
+                                                            <LayoutGrid className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant={viewMode === 'list' ? "secondary" : "ghost"} size="icon" onClick={() => setViewMode('list')} className="rounded-l-none h-8 w-8">
+                                                            <List className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
                                                 </CardHeader>
                                                 <CardContent className="space-y-4">
                                                     {(isLoadingStock || isLoadingProducts) && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-                                                    {!(isLoadingStock || isLoadingProducts) && productsForWarehouse.map(product => {
+                                                    {!(isLoadingStock || isLoadingProducts) && viewMode === 'grid' && productsForWarehouse.map(product => {
                                                         const { currentStock, idealStock, suggestion, lastAction } = getStockData(product.id);
                                                         const lastActionInfo = lastAction ? {
                                                             'in': { text: 'Είσοδος', color: 'text-green-500' },
@@ -411,6 +423,68 @@ export default function AdminWarehousePage() {
                                                             </Card>
                                                         );
                                                     })}
+                                                    {!(isLoadingStock || isLoadingProducts) && viewMode === 'list' && (
+                                                        <div className="border rounded-md overflow-x-auto scrollbar-thin scrollbar-thumb-muted-foreground/20">
+                                                            <div className="min-w-[600px] w-full">
+                                                                <Table>
+                                                                    <TableHeader className="bg-muted/50">
+                                                                    <TableRow>
+                                                                        <TableHead className="w-[60px]">Εικόνα</TableHead>
+                                                                        <TableHead>Προϊόν / Κωδικός</TableHead>
+                                                                        <TableHead className="text-center w-[120px]">Απόθεμα</TableHead>
+                                                                        <TableHead className="text-center w-[120px]">Ιδανικό</TableHead>
+                                                                        <TableHead className="text-right w-[80px]">Πρόταση</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {productsForWarehouse.map(product => {
+                                                                        const { currentStock, idealStock, suggestion } = getStockData(product.id);
+                                                                        return (
+                                                                            <TableRow key={`list-${product.id}`}>
+                                                                                <TableCell>
+                                                                                    {product.imageUrl ? (
+                                                                                        <Image src={product.imageUrl} alt={product.name} width={40} height={40} className="rounded-md object-cover flex-shrink-0" data-ai-hint={product.imageHint} />
+                                                                                    ) : (
+                                                                                        <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center flex-shrink-0">
+                                                                                            <Package className="h-5 w-5 text-muted-foreground" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </TableCell>
+                                                                                <TableCell>
+                                                                                    <div className="font-semibold text-sm">{product.name}</div>
+                                                                                    <div className="text-xs text-muted-foreground">{product.code}</div>
+                                                                                </TableCell>
+                                                                                <TableCell className="text-center">
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        defaultValue={currentStock}
+                                                                                        onBlur={(e) => handleCurrentStockChange(product.id, e.target.value, warehouse.id)}
+                                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                                        className={cn("w-20 h-8 mx-auto text-center font-bold px-1", getStockColor(currentStock, idealStock))}
+                                                                                        min="0"
+                                                                                    />
+                                                                                </TableCell>
+                                                                                <TableCell className="text-center">
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        defaultValue={idealStock}
+                                                                                        onBlur={(e) => handleIdealStockChange(product.id, e.target.value, warehouse.id)}
+                                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                                                        className="w-20 h-8 mx-auto text-center bg-muted/30 font-bold px-1"
+                                                                                        min="0"
+                                                                                    />
+                                                                                </TableCell>
+                                                                                <TableCell className="text-right font-bold text-accent text-lg">
+                                                                                    +{suggestion}
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        );
+                                                                    })}
+                                                                </TableBody>
+                                                                </Table>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </CardContent>
                                             </Card>
                                         </div>

@@ -22,10 +22,12 @@ function getNextDeliveryDate(deliveryDay: string): Date {
     const dayMapping: { [key: string]: number } = {
         'Κυριακή': 0, 'Δευτέρα': 1, 'Τρίτη': 2, 'Τετάρτη': 3, 'Πέμπτη': 4, 'Παρασκευή': 5, 'Σάββατο': 6
     };
-    const deliveryDayIndex = dayMapping[deliveryDay];
-
-    if (typeof deliveryDayIndex === 'undefined') {
-        // Fallback to next day if day is invalid
+    
+    // Split the string into individual days and map them to indices
+    const deliveryDays = deliveryDay.split(',').map(d => d.trim()).filter(d => dayMapping[d] !== undefined);
+    
+    if (deliveryDays.length === 0) {
+        // Fallback to next day if day is invalid or empty
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow;
@@ -34,15 +36,22 @@ function getNextDeliveryDate(deliveryDay: string): Date {
     const today = new Date();
     const todayDayIndex = today.getDay();
     
-    let dayDifference = deliveryDayIndex - todayDayIndex;
-    
-    // If the delivery day is today or has passed for this week, schedule for next week
-    if (dayDifference <= 0) { 
-        dayDifference += 7;
-    }
+    // Find the closest delivery day
+    const differences = deliveryDays.map(d => {
+        const deliveryDayIndex = dayMapping[d];
+        let diff = deliveryDayIndex - todayDayIndex;
+        // If the delivery day is today, we assume it's for next time (unless we want same day?)
+        // For now keep the "next available" logic
+        if (diff <= 0) { 
+            diff += 7;
+        }
+        return diff;
+    });
+
+    const minDifference = Math.min(...differences);
 
     const deliveryDate = new Date();
-    deliveryDate.setDate(today.getDate() + dayDifference);
+    deliveryDate.setDate(today.getDate() + minDifference);
     deliveryDate.setHours(12, 0, 0, 0); // Set a neutral time like noon
     return deliveryDate;
 }
@@ -605,7 +614,7 @@ function NewOrderPageContent() {
       </Card>
       
       <div className="flex justify-end">
-        <Button onClick={handleSubmitOrder} size="lg" className="h-14 bg-accent text-accent-foreground text-xl font-bold hover:bg-accent/90">
+        <Button onClick={handleSubmitOrder} size="lg" className="w-full sm:w-auto h-14 bg-accent text-accent-foreground text-xl font-bold hover:bg-accent/90">
           Υποβολή Παραγγελίας
         </Button>
       </div>

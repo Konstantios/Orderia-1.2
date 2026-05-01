@@ -53,6 +53,9 @@ type JoinRequest = {
 export default function AdminTeamPage() {
     const { toast } = useToast();
     const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [editingMember, setEditingMember] = useState<any>(null);
+    const [isRemoving, setIsRemoving] = useState<string | null>(null);
     
     const { user, firestore, isUserLoading } = useFirebase();
 
@@ -109,7 +112,7 @@ export default function AdminTeamPage() {
                     id: uid,
                     name: details?.name || 'Μέλος χωρίς όνομα',
                     email: details?.email || 'N/A',
-                    role: 'Μέλος',
+                    role: wholesaler.roles?.[uid] || 'Μέλος',
                 };
             });
 
@@ -132,6 +135,43 @@ export default function AdminTeamPage() {
         setIsInviteDialogOpen(false); // Close the dialog
     };
 
+    const handleUpdateRole = (uid: string, newRole: string) => {
+        if (!firestore || !wholesaler) return;
+        
+        const businessDocRef = doc(firestore, 'wholesalers', wholesaler.id);
+        const newRoles = { ...(wholesaler.roles || {}), [uid]: newRole };
+        
+        updateDocumentNonBlocking(businessDocRef, { roles: newRoles }).then(() => {
+            toast({ title: "Ο ρόλος ενημερώθηκε" });
+            setIsEditDialogOpen(false);
+        });
+    };
+
+    const handleRemoveMember = (uid: string) => {
+        if (!firestore || !wholesaler) return;
+        if (uid === wholesaler.ownerId) {
+            toast({ variant: 'destructive', title: "Σφάλμα", description: "Δεν μπορείτε να αφαιρέσετε τον ιδιοκτήτη." });
+            return;
+        }
+
+        setIsRemoving(uid);
+        const businessDocRef = doc(firestore, 'wholesalers', wholesaler.id);
+        const newAdminUids = (wholesaler.adminUids || []).filter(id => id !== uid);
+        const newRoles = { ...(wholesaler.roles || {}) };
+        delete newRoles[uid];
+
+        updateDocumentNonBlocking(businessDocRef, { 
+            adminUids: newAdminUids,
+            roles: newRoles
+        }).then(() => {
+            toast({ title: "Το μέλος αφαιρέθηκε" });
+            setIsRemoving(null);
+        }).catch(err => {
+            console.error("Error removing member:", err);
+            toast({ variant: 'destructive', title: "Σφάλμα", description: "Δεν ήταν δυνατή η αφαίρεση του μέλους." });
+            setIsRemoving(null);
+        });
+    };
     const handleRequest = (request: WithId<JoinRequest>, accepted: boolean) => {
         if (!firestore) return;
         
@@ -283,8 +323,10 @@ export default function AdminTeamPage() {
                                         <Loader2 className="inline-block h-6 w-6 animate-spin" />
                                     </TableCell>
                                 </TableRow>
-                            ) : teamMembers.map((member) => (
-                                <TableRow key={member.id}>
+                            ) : teamMembers.map((member) => {
+                console.log(`Member ID: ${member.id}, Owner ID: ${wholesaler?.ownerId}, Match: ${member.id === wholesaler?.ownerId}`);
+                return (
+                <TableRow key={member.id}>
                                     <TableCell className="font-medium">{member.name}</TableCell>
                                     <TableCell className="text-muted-foreground">{member.email}</TableCell>
                                     <TableCell>
@@ -293,24 +335,70 @@ export default function AdminTeamPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem>Επεξεργασία</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">Αφαίρεση</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                             <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" disabled={isRemoving === member.id}>
+                                                        {isRemoving === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                 <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem 
+                                                        className="cursor-pointer" 
+                                                        onClick={() => {
+                                                            setEditingMember(member);
+                                                            setIsEditDialogOpen(true);
+                                                        }}
+                                                    >
+                                                        Επεξεργασία
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem 
+                                                        className="text-destructive cursor-pointer" 
+                                                        disabled={member.id === wholesaler?.ownerId}
+                                                        onClick={() => handleRemoveMember(member.id)}
+                                                    >
+                                                        Αφαίρεση
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
+                            );
+                        })}
+                    </TableBody>
                    </Table>
                 </CardContent>
             </Card>
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle>Επεξεργασία Μέλους</DialogTitle>
+                        <DialogDescription>
+                            Αλλάξτε τον ρόλο του χρήστη {editingMember?.name}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="edit-role" className="mb-2 block">Ρόλος</Label>
+                        <Select 
+                            value={editingMember?.role} 
+                            onValueChange={(val) => setEditingMember({...editingMember, role: val})}
+                        >
+                            <SelectTrigger id="edit-role">
+                                <SelectValue placeholder="Επιλέξτε ρόλο" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Διαχειριστής">Διαχειριστής</SelectItem>
+                                <SelectItem value="Αποθηκάριος">Αποθηκάριος</SelectItem>
+                                <SelectItem value="Πωλητής">Πωλητής</SelectItem>
+                                <SelectItem value="Μέλος">Μέλος</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Ακύρωση</Button>
+                        <Button onClick={() => handleUpdateRole(editingMember.id, editingMember.role)}>Αποθήκευση</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

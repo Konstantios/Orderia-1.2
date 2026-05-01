@@ -110,32 +110,33 @@ export default function AdminOrdersPage() {
         }
 
         const exportData = filteredOrdersByStatus.flatMap(order => {
-            const commonData = {
-                'ID Παραγγελίας': order.id,
-                'Πελάτης': order.customerName,
-                'Ημερομηνία Παραγγελίας': (order.date as any)?.toDate ? (order.date as any).toDate().toLocaleString('el-GR') : new Date(order.date).toLocaleString('el-GR'),
-                'Κατάσταση': order.status,
-                'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder
-                'Σημειώσεις Πελάτη': order.notes || '-',
-            };
-
             if (order.items.length === 0) {
                 return [{
-                    ...commonData,
-                    'Κωδικός Προϊόντος': '-',
-                    'Προϊόν': '-',
-                    'Ποσότητα': 0,
+                    'Κωδικός': '-',
+                    'Τίτλος': '-',
+                    'Κιβώτια': 0,
+                    'Ημερομηνία': (order.date as any)?.toDate ? (order.date as any).toDate().toLocaleString('el-GR') : new Date(order.date).toLocaleString('el-GR'),
+                    'Πελάτης': order.customerName,
                     'Μονάδα': '-',
+                    'ID Παραγγελίας': order.id,
+                    'Κατάσταση': order.status,
+                    'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder
+                    'Σημειώσεις Πελάτη': order.notes || '-',
                 }];
             }
             return order.items.map(item => {
                 const product = products.find(p => p.id === item.productId); // USE LIVE PRODUCTS
                 return {
-                    ...commonData,
-                    'Κωδικός Προϊόντος': product?.code || '-',
-                    'Προϊόν': product?.name || 'Άγνωστο',
-                    'Ποσότητα': item.quantity,
+                    'Κωδικός': product?.code || '-',
+                    'Τίτλος': product?.name || 'Άγνωστο',
+                    'Κιβώτια': item.quantity,
+                    'Ημερομηνία': (order.date as any)?.toDate ? (order.date as any).toDate().toLocaleString('el-GR') : new Date(order.date).toLocaleString('el-GR'),
+                    'Πελάτης': order.customerName,
                     'Μονάδα': product?.unit || '-',
+                    'ID Παραγγελίας': order.id,
+                    'Κατάσταση': order.status,
+                    'Τηλέφωνο Υπευθύνου': '6900000000', // Placeholder
+                    'Σημειώσεις Πελάτη': order.notes || '-',
                 };
             });
         });
@@ -192,11 +193,11 @@ export default function AdminOrdersPage() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <h1 className="text-lg font-semibold md:text-2xl">Παραγγελίες</h1>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => router.push('/admin/orders/history')}><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
-                <Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="flex-1 sm:flex-initial" onClick={() => router.push('/admin/orders/history')}><History className="mr-2 h-4 w-4" />Ιστορικό</Button>
+                <Button variant="outline" size="sm" className="flex-1 sm:flex-initial" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Εξαγωγή</Button>
               </div>
             </div>
             
@@ -204,10 +205,13 @@ export default function AdminOrdersPage() {
                 <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Ημερομηνια Παραδοσης</h2>
                 {nextSevenDays.length > 0 && (
                 <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-7">
+                    <TabsList className="flex w-full overflow-x-auto justify-start h-auto p-1 bg-muted/50 no-scrollbar">
                          {nextSevenDays.map(day => (
-                             <TabsTrigger key={day.dateString} value={day.dateString} className="capitalize">
-                                {day.dayName} {day.formattedDate}
+                             <TabsTrigger key={day.dateString} value={day.dateString} className="capitalize flex-shrink-0 py-2 px-4">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-[10px] opacity-70">{day.dayName}</span>
+                                    <span className="font-bold">{day.formattedDate}</span>
+                                </div>
                              </TabsTrigger>
                         ))}
                     </TabsList>

@@ -1,27 +1,38 @@
 'use client';
 
 import Image from 'next/image';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { products as allProducts, customers } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Star, Loader2, Minus, Plus, Package } from 'lucide-react';
+import { Loader2, Minus, Plus, Package, LayoutGrid, List } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { InventoryCounting } from './counting';
 import { InventoryDatabase } from './database';
-import { Separator } from '@/components/ui/separator';
-import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryEntry } from './entry';
 import { InventoryExit } from './exit';
-import { useFirebase, useCollection, useFirestore, useMemoFirebase, setDocumentNonBlocking, type WithId } from '@/firebase';
-import { collection, query, where, doc, writeBatch, increment, getDocs, setDoc } from 'firebase/firestore';
-import type { Store, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
+import { useFirebase, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, doc, writeBatch, increment, getDocs, setDoc, documentId, addDoc } from 'firebase/firestore';
+import type { Store, Wholesaler, CustomerInventoryItem, StoreProductConfiguration, Order, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-
+import { Badge } from '@/components/ui/badge';
+import type { WithId } from '@/firebase';
+import { 
+    BarChart, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip, 
+    ResponsiveContainer, 
+    Legend 
+} from 'recharts';
+import { subMonths, format as dateFnsFormat } from 'date-fns';
+import { el as elLocale } from 'date-fns/locale';
 
 const getStockColor = (current: number, ideal: number) => {
     if (ideal === 0) return 'bg-muted/20 border-transparent text-muted-foreground';
@@ -39,99 +50,190 @@ export default function InventoryPage() {
     const { toast } = useToast();
     const { user, isUserLoading, firestore } = useFirebase();
 
-    const [store, setStore] = useState<WithId<Store> | null>(null);
-    const [isLoadingStores, setIsLoadingStores] = useState(true);
+    const [partner, setPartner] = useState<WithId<Store | Wholesaler> | null>(null);
+    const [partnerType, setPartnerType] = useState<'store' | 'wholesaler'>('store');
+    const [isLoadingPartner, setIsLoadingPartner] = useState(true);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-    // 1. Fetch user's store robustly
+    // 1. Fetch user's partner (Store or Wholesaler) robustly
     useEffect(() => {
         if (!firestore || !user) {
-            setIsLoadingStores(false);
+            setIsLoadingPartner(false);
             return;
         };
 
-        const findStore = async () => {
-            setIsLoadingStores(true);
-            const storesRef = collection(firestore, 'stores');
+        const findPartner = async () => {
+            setIsLoadingPartner(true);
             
-            const ownerQuery = query(storesRef, where("ownerId", "==", user.uid));
-            const managerQuery = query(storesRef, where("managerUids", "array-contains", user.uid));
+            // Try Store first
+            const storesRef = collection(firestore, 'stores');
+            const storeOwnerQuery = query(storesRef, where("ownerId", "==", user.uid));
+            const storeManagerQuery = query(storesRef, where("managerUids", "array-contains", user.uid));
 
-            const [ownerSnap, managerSnap] = await Promise.all([
-                getDocs(ownerQuery),
-                getDocs(managerQuery)
+            const [storeOwnerSnap, storeManagerSnap] = await Promise.all([
+                getDocs(storeOwnerQuery),
+                getDocs(storeManagerQuery)
             ]);
 
-            let foundStore: WithId<Store> | null = null;
-            if (!ownerSnap.empty) {
-                const storeDoc = ownerSnap.docs[0];
-                foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
-            } else if (!managerSnap.empty) {
-                 const storeDoc = managerSnap.docs[0];
-                 foundStore = { id: storeDoc.id, ...storeDoc.data() } as WithId<Store>;
+            if (!storeOwnerSnap.empty || !storeManagerSnap.empty) {
+                const docSnap = !storeOwnerSnap.empty ? storeOwnerSnap.docs[0] : storeManagerSnap.docs[0];
+                setPartner({ id: docSnap.id, ...docSnap.data() } as WithId<Store>);
+                setPartnerType('store');
+                setIsLoadingPartner(false);
+                return;
+            }
+
+            // Try Wholesaler
+            const wholesalersRef = collection(firestore, 'wholesalers');
+            const whOwnerQuery = query(wholesalersRef, where("ownerId", "==", user.uid));
+            const whAdminQuery = query(wholesalersRef, where("adminUids", "array-contains", user.uid));
+
+            const [whOwnerSnap, whAdminSnap] = await Promise.all([
+                getDocs(whOwnerQuery),
+                getDocs(whAdminQuery)
+            ]);
+
+            if (!whOwnerSnap.empty || !whAdminSnap.empty) {
+                const docSnap = !whOwnerSnap.empty ? whOwnerSnap.docs[0] : whAdminSnap.docs[0];
+                const whData = { id: docSnap.id, ...docSnap.data() } as WithId<Wholesaler>;
+                setPartner(whData);
+                setPartnerType('wholesaler');
             }
             
-            setStore(foundStore);
-            setIsLoadingStores(false);
+            setIsLoadingPartner(false);
         }
 
-        findStore();
-
+        findPartner();
     }, [user, firestore]);
 
-    // 2. Fetch store's inventory - NOW A SECURE QUERY
+    const isWholesalerPartner = partnerType === 'wholesaler';
+    const partnerCollection = isWholesalerPartner ? 'wholesalers' : 'stores';
+
+    // 2. Fetch partner's inventory
     const inventoryQuery = useMemoFirebase(() => {
-        if (!firestore || !store || !user) return null;
-        return query(
-          collection(firestore, 'stores', store.id, 'inventories'),
-          where('managerUids', 'array-contains', user.uid)
-        );
-    }, [firestore, store, user]);
+        if (!firestore || !partner || !user) return null;
+        return collection(firestore, partnerCollection, partner.id, 'inventories');
+    }, [firestore, partner, partnerCollection]);
     const { data: inventory, isLoading: isLoadingInventory } = useCollection<CustomerInventoryItem>(inventoryQuery);
 
-    // 3. Fetch store's product configurations (ideal stock) - NOW A SECURE QUERY
+    // 3. Fetch partner's product configurations
     const productConfigQuery = useMemoFirebase(() => {
-        if (!firestore || !store || !user) return null;
-        return query(
-          collection(firestore, 'stores', store.id, 'productConfigurations'),
-          where('managerUids', 'array-contains', user.uid)
-        );
-    }, [firestore, store, user]);
+        if (!firestore || !partner || !user) return null;
+        return collection(firestore, partnerCollection, partner.id, 'productConfigurations');
+    }, [firestore, partner, partnerCollection]);
     const { data: productConfigs, isLoading: isLoadingProductConfigs } = useCollection<StoreProductConfiguration>(productConfigQuery);
 
-    // --- Fetch Connected Wholesaler ---
+    // --- Fetch Connected Supplier ---
     const connectionsQuery = useMemoFirebase(() => {
-        if (!firestore || !store) return null;
-        return query(collection(firestore, 'supplierStoreConnections'), where('storeId', '==', store.id), where('isActive', '==', true));
-    }, [firestore, store]);
+        if (!firestore || !partner || isWholesalerPartner) return null;
+        return query(collection(firestore, 'supplierStoreConnections'), where('storeId', '==', partner.id), where('isActive', '==', true));
+    }, [firestore, partner, isWholesalerPartner]);
     const { data: connections, isLoading: isLoadingConnections } = useCollection<WithId<any>>(connectionsQuery);
 
-    const wholesalerId = connections?.[0]?.wholesalerId;
+    const supplierId = isWholesalerPartner 
+        ? (partner as Wholesaler).parentWholesalerId 
+        : connections?.[0]?.wholesalerId;
 
-    const [wholesalerData, setWholesalerData] = useState<any>(null);
+    const [supplierData, setSupplierData] = useState<any>(null);
     useEffect(() => {
-        if (!firestore || !wholesalerId) return;
-        const fetchWholesaler = async () => {
-            const snap = await getDocs(query(collection(firestore, 'wholesalers'), where('__name__', '==', wholesalerId)));
+        if (!firestore || !supplierId) {
+            setSupplierData(null);
+            return;
+        }
+        const fetchSupplier = async () => {
+            const snap = await getDocs(query(collection(firestore, 'wholesalers'), where(documentId(), '==', supplierId)));
             if (!snap.empty) {
-                setWholesalerData({ id: snap.docs[0].id, ...snap.docs[0].data() });
+                setSupplierData({ id: snap.docs[0].id, ...snap.docs[0].data() });
             }
         };
-        fetchWholesaler();
-    }, [firestore, wholesalerId]);
+        fetchSupplier();
+    }, [firestore, supplierId]);
 
-    const wholesalerProductsQuery = useMemoFirebase(() => {
-        if (!firestore || !wholesalerId) return null;
-        return collection(firestore, 'wholesalers', wholesalerId, 'products');
-    }, [firestore, wholesalerId]);
-    const { data: wholesalerProducts, isLoading: isLoadingProducts } = useCollection<WithId<any>>(wholesalerProductsQuery);
+    // Fetch Supplier's Products
+    const supplierProductsQuery = useMemoFirebase(() => {
+        if (!firestore || !supplierId) return null;
+        return collection(firestore, 'wholesalers', supplierId, 'products');
+    }, [firestore, supplierId]);
+    const { data: supplierProducts, isLoading: isLoadingSupplierProducts } = useCollection<WithId<any>>(supplierProductsQuery);
 
-    const inventoryProducts = wholesalerProducts || [];
-    const supplierLogo = wholesalerData?.logoUrl ? { imageUrl: wholesalerData.logoUrl, imageHint: 'Wholesaler logo' } : PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
-    const supplierName = wholesalerData?.companyName || 'Προμηθευτής';
+    // Fetch Our Own Products
+    const ownProductsQuery = useMemoFirebase(() => {
+        if (!firestore || !partner || !isWholesalerPartner) return null;
+        return collection(firestore, 'wholesalers', partner.id, 'products');
+    }, [firestore, partner, isWholesalerPartner]);
+    const { data: ownProducts, isLoading: isLoadingOwnProducts } = useCollection<WithId<any>>(ownProductsQuery);
+
+    const inventoryProducts = useMemo(() => {
+        const assignedIds = new Set(productConfigs?.map(c => c.productId) || []);
+        const assignedProducts = (supplierProducts || []).filter(p => assignedIds.has(p.id));
+        const localProducts = ownProducts || [];
+        
+        const productMap = new Map();
+        assignedProducts.forEach(p => productMap.set(p.id, p));
+        localProducts.forEach(p => productMap.set(p.id, p));
+        
+        return Array.from(productMap.values());
+    }, [supplierProducts, productConfigs, ownProducts]);
+
+    const supplierLogo = supplierData?.logoUrl ? { imageUrl: supplierData.logoUrl, imageHint: 'Supplier logo' } : PlaceHolderImages.find(img => img.id === 'frozen-foods-logo')!;
+    const supplierName = supplierData?.companyName || (isWholesalerPartner ? 'Μητρικός Προμηθευτής' : 'Προμηθευτής');
     
+    // --- Statistics Data Fetching ---
+    const orderQuery = useMemoFirebase(() => {
+        if (!firestore || !partner) return null;
+        return query(
+            collection(firestore, 'orders'),
+            where('storeId', '==', partner.id)
+        );
+    }, [firestore, partner]);
+    const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(orderQuery);
+
+    const monthlyStats = useMemo(() => {
+        if (!orders) return [];
+        const stats: Record<string, any> = {};
+        const now = new Date();
+        
+        for (let i = 5; i >= 0; i--) {
+            const d = subMonths(now, i);
+            const key = dateFnsFormat(d, 'MMM', { locale: elLocale });
+            stats[key] = { name: key, κιβώτια: 0, κιλά: 0, τεμάχια: 0 };
+        }
+
+        orders.forEach(order => {
+            const date = (order.date as any)?.toDate ? (order.date as any).toDate() : new Date(order.date);
+            const key = dateFnsFormat(date, 'MMM', { locale: elLocale });
+            if (stats[key]) {
+                order.items.forEach((item: any) => {
+                    const product = inventoryProducts.find(p => p.id === item.productId);
+                    const unit = item.unit || product?.unit || 'τεμάχιο';
+                    if (unit === 'κιβώτιο') stats[key].κιβώτια += item.quantity;
+                    else if (unit === 'κιλό') stats[key].κιλά += item.quantity;
+                    else stats[key].τεμάχια += item.quantity;
+                });
+            }
+        });
+
+        return Object.values(stats);
+    }, [orders, inventoryProducts]);
+
+    const totals = useMemo(() => {
+        const t = { boxes: 0, kg: 0, pieces: 0 };
+        if (!orders) return t;
+        orders.forEach(order => {
+            order.items.forEach((item: any) => {
+                const product = inventoryProducts.find(p => p.id === item.productId);
+                const unit = item.unit || product?.unit || 'τεμάχιο';
+                if (unit === 'κιβώτιο') t.boxes += item.quantity;
+                else if (unit === 'κιλό') t.kg += item.quantity;
+                else t.pieces += item.quantity;
+            });
+        });
+        return t;
+    }, [orders, inventoryProducts]);
+
     const handleSync = async (scannedItems: Record<string, number>, type: 'counting' | 'in' | 'out') => {
-        if (!firestore || !store) {
-            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν βρέθηκε το κατάστημα.' });
+        if (!firestore || !partner) {
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν βρέθηκε ο συνεργάτης.' });
             return;
         }
 
@@ -146,14 +248,17 @@ export default function InventoryPage() {
 
         const batch = writeBatch(firestore);
         for (const [productId, count] of Object.entries(scannedItems)) {
-            const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-            const data: Partial<CustomerInventoryItem> = {
+            const docRef = doc(firestore, partnerCollection, partner.id, 'inventories', productId);
+            const data: any = {
                 productId,
-                storeId: store.id,
-                ownerId: store.ownerId,
-                managerUids: store.managerUids,
                 lastAction: { type: type, value: count }
             };
+            if (isWholesalerPartner) data.wholesalerId = partner.id;
+            else data.storeId = partner.id;
+            
+            data.ownerId = partner.ownerId || '';
+            data.managerUids = (partner as Store).managerUids || (partner as Wholesaler).adminUids || [];
+
             if (type === 'counting') {
                 batch.set(docRef, { ...data, currentStock: count }, { merge: true });
             } else if (type === 'in') {
@@ -177,20 +282,23 @@ export default function InventoryPage() {
     };
     
     const handleStockChange = async (productId: string, value: string) => {
-        if (!firestore || !store || !user) return;
+        if (!firestore || !partner || !user) return;
 
         const newStock = parseInt(value, 10);
         const stockValue = Math.max(0, isNaN(newStock) ? 0 : newStock);
 
         try {
-            const docRef = doc(firestore, 'stores', store.id, 'inventories', productId);
-            await setDoc(docRef, { 
+            const docRef = doc(firestore, partnerCollection, partner.id, 'inventories', productId);
+            const data: any = { 
                 productId: productId, 
-                storeId: store.id, 
                 currentStock: stockValue,
-                ownerId: store.ownerId || user.uid,
-                managerUids: store.managerUids || [user.uid]
-            }, { merge: true });
+                ownerId: partner.ownerId || user.uid,
+                managerUids: (partner as Store).managerUids || (partner as Wholesaler).adminUids || [user.uid]
+            };
+            if (isWholesalerPartner) data.wholesalerId = partner.id;
+            else data.storeId = partner.id;
+
+            await setDoc(docRef, data, { merge: true });
         } catch (error) {
             console.error('Stock write error:', error);
             toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η ενημέρωση του αποθέματος.' });
@@ -198,203 +306,359 @@ export default function InventoryPage() {
     };
 
     const handleIdealStockChange = async (productId: string, value: string) => {
-        if (!firestore || !store || !user) return;
+        if (!firestore || !partner || !user) return;
 
         const newIdealStock = parseInt(value, 10);
         const idealStockValue = Math.max(0, isNaN(newIdealStock) ? 0 : newIdealStock);
 
         try {
-            const docRef = doc(firestore, 'stores', store.id, 'productConfigurations', productId);
-            await setDoc(docRef, { 
+            const docRef = doc(firestore, partnerCollection, partner.id, 'productConfigurations', productId);
+            const data: any = { 
                 productId: productId, 
-                storeId: store.id, 
                 idealStock: idealStockValue,
-                ownerId: store.ownerId || user.uid,
-                managerUids: store.managerUids || [user.uid]
-            }, { merge: true });
+                ownerId: partner.ownerId || user.uid,
+                managerUids: (partner as Store).managerUids || (partner as Wholesaler).adminUids || [user.uid]
+            };
+            if (isWholesalerPartner) data.wholesalerId = partner.id;
+            else data.storeId = partner.id;
+
+            await setDoc(docRef, data, { merge: true });
         } catch (error) {
             console.error('Ideal stock write error:', error);
             toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η ενημέρωση του ιδανικού αποθέματος.' });
         }
     };
 
+    const handleAddProduct = async (productData: Product) => {
+        if (!firestore || !partner || !isWholesalerPartner) return;
+        try {
+            const productsRef = collection(firestore, 'wholesalers', partner.id, 'products');
+            await addDoc(productsRef, {
+                ...productData,
+                wholesalerId: partner.id,
+                createdAt: new Date()
+            });
+            toast({ title: 'Το προϊόν προστέθηκε!', description: 'Είναι πλέον διαθέσιμο στον κατάλογό σας.' });
+        } catch (error) {
+            console.error('Add product error:', error);
+            toast({ variant: 'destructive', title: 'Σφάλμα', description: 'Δεν ήταν δυνατή η πρόσθεση του προϊόντος.' });
+        }
+    };
+
     const getProductData = (productId: string) => {
         const product = inventoryProducts.find(p => p.id === productId)!;
-        
-        // Robust fetch: Priority 1: Doc ID matches productId. Priority 2: productId field matches.
         const idealStock = productConfigs?.find(i => i.id === productId)?.idealStock 
                         ?? productConfigs?.find(i => i.productId === productId)?.idealStock 
                         ?? 0;
-                        
         const inventoryItem = inventory?.find(i => i.id === productId) 
                            ?? inventory?.find(i => i.productId === productId);
-                           
         const currentStock = inventoryItem?.currentStock || 0;
         const lastAction = inventoryItem?.lastAction;
         const suggestion = Math.max(0, idealStock - currentStock);
         return { product, idealStock, currentStock, suggestion, lastAction };
     };
     
-    if (isUserLoading || isLoadingStores) {
+    if (isUserLoading || isLoadingPartner) {
         return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
     
-    if (!store && !isLoadingStores) {
+    if (!partner && !isLoadingPartner) {
         return (
             <div className="text-center py-10">
-                <h2 className="text-2xl font-bold">Δεν βρέθηκε κατάστημα</h2>
-                <p className="text-muted-foreground mt-2">Φαίνεται πως ο λογαριασμός σας δεν είναι συνδεδεμένος με κάποιο κατάστημα. Μπορείτε να δημιουργήσετε ένα από την αρχική σελίδα.</p>
+                <h2 className="text-2xl font-bold">Δεν βρέθηκε σύνδεση</h2>
+                <p className="text-muted-foreground mt-2">Φαίνεται πως ο λογαριασμός σας δεν είναι συνδεδεμένος με κάποιο κατάστημα ή προμηθευτή.</p>
                 <Button asChild className="mt-4"><Link href="/">Επιστροφή</Link></Button>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <h1 className="font-headline text-3xl font-bold">Αποθήκη</h1>
-            <Tabs defaultValue="stock" className="w-full">
-                <div className="flex justify-center">
-                    <TabsList className="flex-wrap h-auto">
-                        <TabsTrigger value="stock">Απόθεμα</TabsTrigger>
-                        <TabsTrigger value="counting">Καταμέτρηση</TabsTrigger>
-                        <TabsTrigger value="in">Είσοδος</TabsTrigger>
-                        <TabsTrigger value="out">Έξοδος</TabsTrigger>
-                        <TabsTrigger value="database">Βάση Σάρωσης</TabsTrigger>
-                    </TabsList>
+        <div className="space-y-6 max-w-5xl mx-auto pb-10 px-4 sm:px-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="font-headline text-3xl font-bold tracking-tight">Αποθήκη</h1>
+                    <p className="text-muted-foreground">Διαχείριση αποθέματος και παραλαβών για {isWholesalerPartner ? (partner as Wholesaler).companyName : partner ? (partner as Store).businessName : ''}</p>
                 </div>
-                <TabsContent value="stock" className="mt-6">
-                    <div className="space-y-4">
-                        <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Προμηθευτες</h2>
-                        <Accordion type="single" collapsible defaultValue="item-1" className="w-full">
-                            <AccordionItem value="item-1" className="border-none">
-                                <Card className="rounded-lg">
-                                  <AccordionTrigger className="flex w-full items-center justify-between p-3 hover:no-underline">
-                                      <div className="flex items-center gap-4 text-left">
-                                          <Image src={supplierLogo.imageUrl} alt={supplierName} width={48} height={48} className="rounded-md" data-ai-hint={supplierLogo.imageHint} />
-                                          <div>
-                                              <div className="flex items-center gap-2">
-                                                  <p className="font-semibold">{supplierName}</p>
-                                                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                                              </div>
-                                              <p className="text-sm text-muted-foreground">{inventoryProducts.length} Ενεργά Προϊόντα</p>
-                                          </div>
-                                      </div>
-                                  </AccordionTrigger>
-                                </Card>
-                                <AccordionContent className="p-0">
-                                    <div className="space-y-4 pt-4">
-                                        <h2 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Λιστα προϊοντων</h2>
-                                        {(isLoadingInventory || isLoadingProductConfigs) && <div className="flex justify-center items-center h-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-                                        {!(isLoadingInventory || isLoadingProductConfigs) && inventoryProducts.map(({ id }) => {
-                                            const { product, idealStock, currentStock, suggestion, lastAction } = getProductData(id);
+                {isWholesalerPartner && (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 self-start sm:self-center font-bold px-3 py-1">
+                        ΛΕΙΤΟΥΡΓΙΑ ΥΠΟ-ΠΡΟΜΗΘΕΥΤΗ
+                    </Badge>
+                )}
+            </div>
+
+            <Tabs defaultValue="stock" className="w-full">
+                <TabsList className="grid grid-cols-2 lg:grid-cols-6 w-full bg-muted/30 p-1 h-auto rounded-xl">
+                    <TabsTrigger value="stock" className="rounded-lg py-2">Απόθεμα</TabsTrigger>
+                    <TabsTrigger value="counting" className="rounded-lg py-2">Καταμέτρηση</TabsTrigger>
+                    <TabsTrigger value="in" className="rounded-lg py-2">Είσοδος</TabsTrigger>
+                    <TabsTrigger value="out" className="rounded-lg py-2">Έξοδος</TabsTrigger>
+                    <TabsTrigger value="stats" className="rounded-lg py-2">Στατιστικά</TabsTrigger>
+                    <TabsTrigger value="database" className="rounded-lg py-2">Βάση Σάρωσης</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="stock" className="mt-8">
+                    <div className="space-y-6">
+                        <Card className="border-none shadow-sm bg-gradient-to-r from-primary/5 to-transparent border-l-4 border-l-primary">
+                            <CardContent className="p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                     <div className="h-12 w-12 relative rounded-xl overflow-hidden shadow-sm border border-background bg-white">
+                                        <Image src={supplierLogo.imageUrl} alt={supplierName} fill className="object-contain p-1" data-ai-hint={supplierLogo.imageHint} />
+                                     </div>
+                                     <div>
+                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">KYPIΟΣ ΠΡΟΜΗΘΕΥΤΗΣ</p>
+                                         <p className="font-bold text-lg">{supplierName}</p>
+                                     </div>
+                                </div>
+                                <div className="hidden sm:block text-right">
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">ΠΡΟΪΟΝΤΑ</p>
+                                    <p className="font-bold text-lg">{inventoryProducts.length}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <div className="flex justify-end text-muted-foreground w-full">
+                            <div className="flex border rounded-md">
+                                <Button variant={viewMode === 'grid' ? "secondary" : "ghost"} size="icon" onClick={() => setViewMode('grid')} className="rounded-r-none h-8 w-8">
+                                    <LayoutGrid className="h-4 w-4" />
+                                </Button>
+                                <Button variant={viewMode === 'list' ? "secondary" : "ghost"} size="icon" onClick={() => setViewMode('list')} className="rounded-l-none h-8 w-8">
+                                    <List className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {viewMode === 'grid' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {(isLoadingInventory || isLoadingProductConfigs) && <div className="col-span-full flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
+                            {!(isLoadingInventory || isLoadingProductConfigs) && inventoryProducts.map(({ id }) => {
+                                const { product, idealStock, currentStock, suggestion, lastAction } = getProductData(id);
+                                if (!product) return null;
+
+                                const lastActionInfo = lastAction ? {
+                                    'in': { text: 'Είσοδος', color: 'text-green-600', bg: 'bg-green-50' },
+                                    'out': { text: 'Έξοδος', color: 'text-red-600', bg: 'bg-red-50' },
+                                    'counting': { text: 'Καταμέτρηση', color: 'text-amber-600', bg: 'bg-amber-50' }
+                                }[lastAction.type] : null;
+
+                                return (
+                                    <Card key={id} className="overflow-hidden border-2 border-primary/5 hover:border-primary/20 transition-all group shadow-sm hover:shadow-md">
+                                        <CardContent className="p-0">
+                                            <div className="p-4 flex items-center gap-4 border-b border-primary/5">
+                                                {product.imageUrl ? (
+                                                    <div className="h-14 w-14 relative rounded-lg overflow-hidden border border-border bg-white shadow-xs group-hover:scale-105 transition-transform">
+                                                        <Image src={product.imageUrl} alt={product.name} fill className="object-contain p-1" data-ai-hint={product.imageHint} />
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-14 w-14 bg-muted rounded-lg flex items-center justify-center">
+                                                        <Package className="h-8 w-8 text-muted-foreground/40" />
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold truncate" title={product.name}>{product.name}</p>
+                                                    <Badge variant="outline" className="text-[10px] font-mono mt-1 border-none bg-muted/50">
+                                                        {product.code || product.sku}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="p-4 grid grid-cols-3 gap-2">
+                                                <div className={cn('rounded-xl p-2 flex flex-col items-center justify-center border-2 transition-colors', getStockColor(currentStock, idealStock))}>
+                                                    <p className="text-[9px] font-black uppercase tracking-tighter opacity-70">ΑΠΟΘΕΜΑ</p>
+                                                    <div className="flex items-center gap-1 mt-1">
+                                                        <span className="text-xl font-black">{currentStock}</span>
+                                                        <div className="flex flex-col">
+                                                            <button onClick={() => handleStockChange(id, String(currentStock + 1))} className="hover:text-primary transition-colors"><Plus className="h-3 w-3" /></button>
+                                                            <button onClick={() => handleStockChange(id, String(currentStock - 1))} className="hover:text-primary transition-colors"><Minus className="h-3 w-3" /></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="rounded-xl p-2 flex flex-col items-center justify-center bg-muted/30 border-2 border-transparent">
+                                                    <p className="text-[9px] font-black uppercase tracking-tighter opacity-70">ΙΔΑΝΙΚΟ</p>
+                                                    <div className="flex items-center gap-1 mt-1">
+                                                        <span className="text-xl font-bold">{idealStock}</span>
+                                                        <div className="flex flex-col">
+                                                            <button onClick={() => handleIdealStockChange(id, String(idealStock + 1))} className="hover:text-primary transition-colors"><Plus className="h-3 w-3" /></button>
+                                                            <button onClick={() => handleIdealStockChange(id, String(idealStock - 1))} className="hover:text-primary transition-colors"><Minus className="h-3 w-3" /></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="rounded-xl p-2 flex flex-col items-center justify-center bg-blue-50 text-blue-700 border-2 border-transparent">
+                                                    <p className="text-[9px] font-black uppercase tracking-tighter opacity-70">ΠΡΟΤΑΣΗ</p>
+                                                    <p className="text-xl font-black mt-1">+{suggestion}</p>
+                                                </div>
+                                            </div>
+
+                                            {lastActionInfo && (
+                                                <div className={cn("px-4 py-2 text-[10px] font-bold flex items-center justify-center gap-2", lastActionInfo.bg, lastActionInfo.color)}>
+                                                    <span>ΤΕΛΕΥΤΑΙΑ ΕΝΕΡΓΕΙΑ:</span>
+                                                    <span>{lastActionInfo.text.toUpperCase()} {lastAction.value}</span>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                        )}
+
+                        {viewMode === 'list' && (
+                            <div className="border rounded-md overflow-x-auto bg-card scrollbar-thin scrollbar-thumb-muted-foreground/20">
+                                <div className="min-w-[600px] w-full">
+                                    <Table>
+                                        <TableHeader className="bg-muted/50">
+                                        <TableRow>
+                                            <TableHead className="w-[60px]">Εικόνα</TableHead>
+                                            <TableHead>Προϊόν / Κωδικός</TableHead>
+                                            <TableHead className="text-center w-[120px]">Απόθεμα</TableHead>
+                                            <TableHead className="text-center w-[120px]">Ιδανικό</TableHead>
+                                            <TableHead className="text-right w-[80px]">Πρόταση</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {(isLoadingInventory || isLoadingProductConfigs) ? (
+                                            <TableRow><TableCell colSpan={5} className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" /></TableCell></TableRow>
+                                        ) : inventoryProducts.map(({ id }) => {
+                                            const { product, idealStock, currentStock, suggestion } = getProductData(id);
                                             if (!product) return null;
-
-                                            const lastActionInfo = lastAction ? {
-                                                'in': { text: 'Είσοδος', color: 'text-green-500' },
-                                                'out': { text: 'Έξοδος', color: 'text-destructive' },
-                                                'counting': { text: 'Καταμέτρηση', color: 'text-yellow-500' }
-                                            }[lastAction.type] : null;
-
                                             return (
-                                                <Card key={id} className="overflow-hidden bg-card">
-                                                    <CardContent className="p-4">
-                                                        <div className="flex items-center gap-4">
-                                                            {product.imageUrl ? (
-                                                                <Image src={product.imageUrl} alt={product.name} width={64} height={64} className="rounded-lg flex-shrink-0 object-cover" data-ai-hint={product.imageHint} />
-                                                            ) : (
-                                                                <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
-                                                                    <Package className="h-8 w-8 text-muted-foreground" />
-                                                                </div>
-                                                            )}
-                                                            <div className="flex-1">
-                                                                <p className="font-semibold">{product.name}</p>
-                                                                <p className="text-sm text-muted-foreground">{product.code}</p>
+                                                <TableRow key={`list-${id}`}>
+                                                    <TableCell>
+                                                        {product.imageUrl ? (
+                                                            <div className="h-10 w-10 relative rounded-md overflow-hidden bg-white border">
+                                                                <Image src={product.imageUrl} alt={product.name} fill className="object-contain p-1" data-ai-hint={product.imageHint} />
                                                             </div>
-                                                        </div>
-                                                        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                                                            <div className={cn('rounded-lg border p-2 flex flex-col justify-center items-center', getStockColor(currentStock, idealStock))}>
-                                                                <p className="text-xs font-semibold uppercase mb-1">ΑΠΟΘΕΜΑ</p>
-                                                                <div className="flex items-center justify-center gap-1">
-                                                                    <Input
-                                                                        key={`stock-${id}-${currentStock}`}
-                                                                        type="number"
-                                                                        defaultValue={currentStock}
-                                                                        onBlur={(e) => handleStockChange(id, e.target.value)}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                        className="w-16 h-auto p-0 text-2xl font-black text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
-                                                                        min="0"
-                                                                    />
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleStockChange(id, String(currentStock + 1))}>
-                                                                            <Plus className="h-4 w-4" />
-                                                                        </Button>
-                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleStockChange(id, String(currentStock - 1))}>
-                                                                            <Minus className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
+                                                        ) : (
+                                                            <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center flex-shrink-0">
+                                                                <Package className="h-5 w-5 text-muted-foreground" />
                                                             </div>
-                                                            <div className="rounded-lg bg-muted/30 p-2 flex flex-col justify-center items-center">
-                                                                <p className="text-xs font-semibold uppercase text-muted-foreground mb-1">ΙΔΑΝΙΚΟ</p>
-                                                                <div className="flex items-center justify-center gap-1">
-                                                                    <Input
-                                                                        key={`ideal-${id}-${idealStock}`}
-                                                                        type="number"
-                                                                        defaultValue={idealStock}
-                                                                        onBlur={(e) => handleIdealStockChange(id, e.target.value)}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                                                                        className="w-16 h-auto p-0 text-2xl font-bold text-center bg-transparent border-0 shadow-none focus-visible:ring-0"
-                                                                        min="0"
-                                                                    />
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleIdealStockChange(id, String(idealStock + 1))}>
-                                                                            <Plus className="h-4 w-4" />
-                                                                        </Button>
-                                                                        <Button variant="outline" size="icon" className="h-6 w-6 rounded-md" onClick={() => handleIdealStockChange(id, String(idealStock - 1))}>
-                                                                            <Minus className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="rounded-lg bg-muted/30 p-2">
-                                                                <p className="text-xs font-semibold uppercase text-muted-foreground">ΠΡΟΤΑΣΗ</p>
-                                                                <p className="text-2xl font-bold text-accent">+{suggestion}</p>
-                                                            </div>
-                                                        </div>
-                                                        {lastAction && lastActionInfo && (
-                                                            <>
-                                                                <Separator className="my-3" />
-                                                                <div className={cn("flex items-center justify-center gap-2 text-xs font-medium", lastActionInfo.color)}>
-                                                                    <span>Προηγ. ενέργεια:</span>
-                                                                    <span className="font-bold">{lastActionInfo.text} {lastAction.value}</span>
-                                                                </div>
-                                                            </>
                                                         )}
-                                                    </CardContent>
-                                                </Card>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="font-semibold text-sm">{product.name}</div>
+                                                        <div className="text-xs text-muted-foreground">{product.code || product.sku}</div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Input
+                                                            type="number"
+                                                            defaultValue={currentStock}
+                                                            onBlur={(e) => handleStockChange(id, e.target.value)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                            className={cn("w-20 h-8 mx-auto text-center font-bold px-1", getStockColor(currentStock, idealStock))}
+                                                            min="0"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Input
+                                                            type="number"
+                                                            defaultValue={idealStock}
+                                                            onBlur={(e) => handleIdealStockChange(id, e.target.value)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                                            className="w-20 h-8 mx-auto text-center bg-muted/30 font-bold px-1"
+                                                            min="0"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold text-accent text-lg">
+                                                        +{suggestion}
+                                                    </TableCell>
+                                                </TableRow>
                                             );
                                         })}
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                        )}
                     </div>
                 </TabsContent>
-                <TabsContent value="counting" className="mt-6">
-                    <InventoryCounting products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'counting')} />
+
+                <TabsContent value="counting" className="mt-8">
+                    <InventoryCounting 
+                        products={inventoryProducts} 
+                        customer={{ name: partnerType === 'store' ? (partner as Store)?.businessName : (partner as Wholesaler)?.companyName }} 
+                        inventory={inventory || []} 
+                        productConfigs={productConfigs || []} 
+                        isLoading={isLoadingInventory || isLoadingProductConfigs}
+                        onSync={(items) => handleSync(items, 'counting')} 
+                    />
                 </TabsContent>
-                <TabsContent value="in" className="mt-6">
-                    <InventoryEntry products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'in')} />
+                <TabsContent value="in" className="mt-8">
+                    <InventoryEntry 
+                        products={inventoryProducts} 
+                        customer={{ name: partnerType === 'store' ? (partner as Store)?.businessName : (partner as Wholesaler)?.companyName }} 
+                        inventory={inventory || []} 
+                        productConfigs={productConfigs || []} 
+                        isLoading={isLoadingInventory || isLoadingProductConfigs}
+                        onSync={(items) => handleSync(items, 'in')} 
+                    />
                 </TabsContent>
-                 <TabsContent value="out" className="mt-6">
-                    <InventoryExit products={inventoryProducts} customer={{ name: supplierName }} inventory={inventory || []} onSync={(items) => handleSync(items, 'out')} />
+                <TabsContent value="out" className="mt-8">
+                    <InventoryExit 
+                        products={inventoryProducts} 
+                        customer={{ name: partnerType === 'store' ? (partner as Store)?.businessName : (partner as Wholesaler)?.companyName }} 
+                        inventory={inventory || []} 
+                        productConfigs={productConfigs || []} 
+                        isLoading={isLoadingInventory || isLoadingProductConfigs}
+                        onSync={(items) => handleSync(items, 'out')} 
+                    />
                 </TabsContent>
-                <TabsContent value="database" className="mt-6">
-                    <InventoryDatabase products={inventoryProducts} />
+                <TabsContent value="stats" className="mt-8 space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <Card className="border-2 border-primary/5 shadow-sm overflow-hidden">
+                                <CardContent className="p-6">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Συνολικά Κιβώτια</p>
+                                <p className="text-4xl font-black text-primary">{totals.boxes.toLocaleString('el-GR')}</p>
+                                </CardContent>
+                        </Card>
+                        <Card className="border-2 border-primary/5 shadow-sm overflow-hidden">
+                                <CardContent className="p-6">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Συνολικά Κιλά</p>
+                                <p className="text-4xl font-black text-primary">{totals.kg.toLocaleString('el-GR')}</p>
+                                </CardContent>
+                        </Card>
+                            <Card className="border-2 border-primary/5 shadow-sm overflow-hidden">
+                                <CardContent className="p-6">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Συνολικά Τεμάχια</p>
+                                <p className="text-4xl font-black text-primary">{totals.pieces.toLocaleString('el-GR')}</p>
+                                </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card className="border-2 border-primary/5 shadow-sm">
+                        <CardContent className="pt-8">
+                            <div className="mb-6">
+                                <h3 className="text-lg font-bold">Όγκος Παραγγελιών / Κατανάλωση</h3>
+                                <p className="text-sm text-muted-foreground">Σύγκριση ανά μήνα για το τελευταίο εξάμηνο.</p>
+                            </div>
+                            <div className="h-[350px] w-full">
+                                {isLoadingOrders ? (
+                                    <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={monthlyStats}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                                            <YAxis axisLine={false} tickLine={false} />
+                                            <Tooltip 
+                                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                            />
+                                            <Legend verticalAlign="top" align="right" iconType="circle" />
+                                            <Bar name="Κιβώτια" dataKey="κιβώτια" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                            <Bar name="Κιλά" dataKey="κιλά" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="database" className="mt-8">
+                    <InventoryDatabase 
+                        products={inventoryProducts} 
+                        isWholesaler={isWholesalerPartner}
+                        onAddProduct={handleAddProduct}
+                    />
                 </TabsContent>
             </Tabs>
         </div>
     );
 }
-
-    

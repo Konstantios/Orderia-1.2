@@ -112,12 +112,14 @@ export default function AdminOrdersHistoryPage() {
         const exportData = ordersForSelectedDate.flatMap(order =>
             order.items.map(item => {
                 const product = products?.find(p => p.id === item.productId);
+                const orderDate = getOrderShippedDate(order);
                 return {
+                    'Κωδικός': product?.code || '-',
+                    'Τίτλος': product?.name || 'Άγνωστο',
+                    'Κιβώτια': item.quantity,
+                    'Ημερομηνία': orderDate ? format(orderDate, 'd/M/yyyy') : '-',
                     'Πελάτης': order.customerName,
                     'ID': order.id,
-                    'Κωδικός': product?.code || '-',
-                    'Προϊόν': product?.name || 'Άγνωστο',
-                    'Ποσότητα': item.quantity,
                     'Μονάδα': product?.unit || '-',
                     'Σημειώσεις': order.notes || '-',
                 };

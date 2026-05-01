@@ -2,11 +2,13 @@
 
 import React, { useMemo, type ReactNode } from 'react';
 import { FirebaseProvider } from '@/firebase/provider';
-import { initializeFirebase } from '@/firebase';
+import { initializeFirebase } from './index';
 
 interface FirebaseClientProviderProps {
   children: ReactNode;
 }
+
+import { NotificationHandler } from '@/components/notifications/notification-handler';
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
   const firebaseServices = useMemo(() => {
@@ -37,6 +39,7 @@ export function FirebaseClientProvider({ children }: FirebaseClientProviderProps
       firestore={firebaseServices.firestore}
       storage={firebaseServices.storage}
     >
+      <NotificationHandler />
       {children}
     </FirebaseProvider>
   );

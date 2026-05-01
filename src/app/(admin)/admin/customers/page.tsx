@@ -1,4 +1,5 @@
 'use client';
+// Build trigger: 2026-04-16T12:56
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,8 +10,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MoreHorizontal, PlusCircle, Loader2, CheckCircle2, XCircle, Bell, FileSpreadsheet, Check, Download } from 'lucide-react';
 import type { Store, Wholesaler, SupplierStoreConnection, JoinRequest } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import * as XLSX from 'xlsx';
 import {
   Dialog,
@@ -43,8 +46,19 @@ const CustomerForm = ({ customer, onSave, onCancel }: { customer: Partial<Store>
         setFormData(prev => ({...prev, [name]: value}));
     }
     
-    const handleSelectChange = (value: string) => {
-        setFormData(prev => ({...prev, deliveryDay: value}));
+    const handleDayToggle = (day: string) => {
+        const currentDays = formData.deliveryDay ? formData.deliveryDay.split(',').map(d => d.trim()) : [];
+        let newDays;
+        if (currentDays.includes(day)) {
+            newDays = currentDays.filter(d => d !== day);
+        } else {
+            newDays = [...currentDays, day];
+        }
+        // Keep them sorted by day of week for consistency
+        const DAYS_ORDER = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'];
+        newDays.sort((a, b) => DAYS_ORDER.indexOf(a) - DAYS_ORDER.indexOf(b));
+        
+        setFormData(prev => ({...prev, deliveryDay: newDays.join(', ')}));
     }
 
     const handleSubmit = () => {
@@ -113,22 +127,98 @@ const CustomerForm = ({ customer, onSave, onCancel }: { customer: Partial<Store>
                     <Label htmlFor="googleMapsLink" className="text-right">Google Maps</Label>
                     <Input id="googleMapsLink" name="googleMapsLink" value={formData.googleMapsLink || ''} onChange={handleChange} className="col-span-3" />
                 </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                    <Label className="text-right pt-2">Ημ. Παράδοσης</Label>
+                    <div className="col-span-3 grid grid-cols-2 gap-2 border rounded-md p-3 bg-muted/20">
+                        {['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'].map(day => {
+                            const isChecked = formData.deliveryDay?.split(',').map(d => d.trim()).includes(day);
+                            return (
+                                <div key={day} className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id={`day-${day}`} 
+                                        checked={isChecked}
+                                        onCheckedChange={() => handleDayToggle(day)}
+                                    />
+                                    <label 
+                                        htmlFor={`day-${day}`}
+                                        className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                    >
+                                        {day}
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={onCancel}>Ακύρωση</Button>
+                <Button onClick={handleSubmit}>Αποθήκευση</Button>
+            </DialogFooter>
+        </>
+    );
+};
+
+
+const WholesalerForm = ({ wholesaler, onSave, onCancel }: { wholesaler: Partial<Wholesaler> | null; onSave: (data: Omit<Wholesaler, 'id' | 'ownerId' | 'adminUids'>) => void; onCancel: () => void }) => {
+    const [formData, setFormData] = useState<Partial<Wholesaler>>(wholesaler || {});
+    const { toast } = useToast();
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({...prev, [name]: value}));
+    }
+
+    const handleSubmit = () => {
+        if (!formData.companyName || !formData.ownerName || !formData.email || !formData.taxId) {
+            toast({
+                variant: 'destructive',
+                title: 'Ελλιπή Στοιχεία',
+                description: 'Παρακαλώ συμπληρώστε όλα τα υποχρεωτικά πεδία.',
+            });
+            return;
+        }
+
+        const dataToSave: Omit<Wholesaler, 'id' | 'ownerId' | 'adminUids'> = {
+            companyName: formData.companyName,
+            ownerName: formData.ownerName,
+            email: formData.email,
+            taxId: formData.taxId,
+            description: formData.description || '',
+            logoUrl: formData.logoUrl || '',
+        };
+
+        onSave(dataToSave);
+    }
+    
+    return (
+        <>
+            <DialogHeader>
+                <DialogTitle>{wholesaler?.id ? 'Επεξεργασία Υπο-Προμηθευτή' : 'Καταχώρηση Νέου Υπο-Προμηθευτή'}</DialogTitle>
+                <DialogDescription>
+                    {wholesaler?.id ? 'Επεξεργαστείτε τα στοιχεία του υπο-προμηθευτή.' : 'Συμπληρώστε τα στοιχεία για να προσθέσετε έναν νέο υπο-προμηθευτή.'}
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="companyName" className="text-right">Επωνυμία</Label>
+                    <Input id="companyName" name="companyName" value={formData.companyName || ''} onChange={handleChange} className="col-span-3" />
+                </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="taxId" className="text-right">ΑΦΜ</Label>
+                    <Input id="taxId" name="taxId" value={formData.taxId || ''} onChange={handleChange} className="col-span-3" />
+                </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="ownerName" className="text-right">Υπεύθυνος</Label>
+                    <Input id="ownerName" name="ownerName" value={formData.ownerName || ''} onChange={handleChange} className="col-span-3" />
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="deliveryDay" className="text-right">Ημ. Παράδοσης</Label>
-                    <Select onValueChange={handleSelectChange} defaultValue={formData.deliveryDay}>
-                        <SelectTrigger className="col-span-3">
-                            <SelectValue placeholder="Επιλέξτε ημέρα" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Δευτέρα">Δευτέρα</SelectItem>
-                            <SelectItem value="Τρίτη">Τρίτη</SelectItem>
-                            <SelectItem value="Τετάρτη">Τετάρτη</SelectItem>
-                            <SelectItem value="Πέμπτη">Πέμπτη</SelectItem>
-                            <SelectItem value="Παρασκευή">Παρασκευή</SelectItem>
-                            <SelectItem value="Σάββατο">Σάββατο</SelectItem>
-                            <SelectItem value="Κυριακή">Κυριακή</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <Label htmlFor="email" className="text-right">Email</Label>
+                    <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">Περιγραφή</Label>
+                    <Textarea id="description" name="description" value={formData.description || ''} onChange={handleChange} className="col-span-3" />
                 </div>
             </div>
             <DialogFooter>
@@ -145,11 +235,12 @@ export default function AdminCustomersPage() {
     const { user, firestore } = useFirebase();
     
     const { toast } = useToast();
+    const [mainTab, setMainTab] = useState('customers');
     const [activeTab, setActiveTab] = useState('all');
     const DAYS_OF_WEEK = ['Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο', 'Κυριακή'];
 
     const handleExportExcel = (day?: string) => {
-        const listToExport = day ? customers.filter(c => c.deliveryDay === day) : customers;
+        const listToExport = day ? customers.filter(c => c.deliveryDay?.split(',').map(s => s.trim()).includes(day)) : customers;
         
         if (listToExport.length === 0) {
             toast({ variant: 'destructive', title: 'Κενή Λίστα', description: `Δεν υπάρχουν πελάτες για ${day || 'όλες τις ημέρες'}.` });
@@ -180,7 +271,9 @@ export default function AdminCustomersPage() {
     const [isProcessingRequest, setIsProcessingRequest] = useState<string | null>(null);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isWholesalerDialogOpen, setIsWholesalerDialogOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Partial<WithId<Store>> | null>(null);
+    const [editingWholesaler, setEditingWholesaler] = useState<Partial<WithId<Wholesaler>> | null>(null);
 
     // CSV Import state
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -194,8 +287,8 @@ export default function AdminCustomersPage() {
     const [customNotifTitle, setCustomNotifTitle] = useState('');
     const [customNotifBody, setCustomNotifBody] = useState('');
     const [isSendingCustomNotif, setIsSendingCustomNotif] = useState(false);
-    // Maps recipientUid to an array of acknowledged message info
-    const [acknowledgedMessages, setAcknowledgedMessages] = useState<Map<string, {id: string, title: string, date: any}[]>>(new Map());
+    // Maps recipientUid to an array of customer message info (acknowledged or not)
+    const [customerNotifications, setCustomerNotifications] = useState<Map<string, {id: string, title: string, date: any, isAcknowledged: boolean}[]>>(new Map());
 
     const wholesalerQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -203,6 +296,12 @@ export default function AdminCustomersPage() {
     }, [user, firestore]);
     const { data: wholesalers, isLoading: isLoadingWholesalers } = useCollection<Wholesaler>(wholesalerQuery);
     const wholesaler = wholesalers?.[0];
+
+    const subSuppliersQuery = useMemoFirebase(() => {
+        if (!firestore || !wholesaler) return null;
+        return query(collection(firestore, 'wholesalers'), where('parentWholesalerId', '==', wholesaler.id));
+    }, [firestore, wholesaler]);
+    const { data: subSuppliers, isLoading: isLoadingSubSuppliers } = useCollection<Wholesaler>(subSuppliersQuery);
 
     const connectionsQuery = useMemoFirebase(() => {
         if (!firestore || !wholesaler) return null;
@@ -294,37 +393,34 @@ export default function AdminCustomersPage() {
 
         const fetchAcknowledgements = async () => {
             try {
-                // Get all custom_message notifications for this wholesaler that are acknowledged
-                // Note: In production a time limit (e.g. last 48h) would be better
                 const q = query(
                     collection(firestore, 'notifications'), 
                     where('wholesalerId', '==', wholesaler.id),
                     where('type', '==', 'custom_message')
                 );
                 const querySnapshot = await getDocs(q);
-                const results = new Map<string, {id: string, title: string, date: any}[]>();
+                const results = new Map<string, {id: string, title: string, date: any, isAcknowledged: boolean}[]>();
                 
                 querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    if (data.acknowledgedAt) {
-                        const uid = data.recipientUid;
-                        const messageInfo = { 
-                            id: doc.id, 
-                            title: data.title,
-                            date: data.acknowledgedAt.toDate ? data.acknowledgedAt.toDate() : new Date(data.acknowledgedAt)
-                        };
-                        
-                        if (!results.has(uid)) {
-                            results.set(uid, []);
-                        }
-                        
-                        const current = results.get(uid)!;
-                        if (!current.find(m => m.id === doc.id)) {
-                            current.push(messageInfo);
-                        }
+                    const uid = data.recipientUid;
+                    const messageInfo = { 
+                        id: doc.id, 
+                        title: data.title,
+                        isAcknowledged: !!data.acknowledgedAt,
+                        date: data.acknowledgedAt?.toDate ? data.acknowledgedAt.toDate() : (data.createdAt?.toDate ? data.createdAt.toDate() : new Date())
+                    };
+                    
+                    if (!results.has(uid)) {
+                        results.set(uid, []);
+                    }
+                    
+                    const current = results.get(uid)!;
+                    if (!current.find(m => m.id === doc.id)) {
+                        current.push(messageInfo);
                     }
                 });
-                setAcknowledgedMessages(results);
+                setCustomerNotifications(results);
             } catch (e) {
                 console.error("Error fetching acknowledgements:", e);
             }
@@ -433,6 +529,51 @@ export default function AdminCustomersPage() {
         }
     }
 
+    const handleSaveWholesaler = async (data: Omit<Wholesaler, 'id' | 'ownerId' | 'adminUids'>) => {
+        if (!firestore || !wholesaler) return;
+        setIsLoading(true);
+        try {
+            if (editingWholesaler?.id) {
+                const docRef = doc(firestore, 'wholesalers', editingWholesaler.id);
+                await updateDocumentNonBlocking(docRef, data);
+                toast({ title: "Επιτυχής Ενημέρωση", description: `Τα στοιχεία του υπο-προμηθευτή '${data.companyName}' ενημερώθηκαν.` });
+            } else {
+                const cleanData = JSON.parse(JSON.stringify(data));
+                const newDocData = {
+                    ...cleanData,
+                    ownerId: '', 
+                    adminUids: [],
+                    parentWholesalerId: wholesaler.id,
+                    parentWholesalerName: wholesaler.companyName,
+                };
+                await addDoc(collection(firestore, 'wholesalers'), newDocData);
+                toast({ title: "Επιτυχής Καταχώρηση", description: `Ο υπο-προμηθευτής '${data.companyName}' προστέθηκε.` });
+            }
+        } catch (e) {
+            console.error(e);
+            toast({ variant: "destructive", title: "Σφάλμα Αποθήκευσης" });
+        } finally {
+            setIsLoading(false);
+            setIsWholesalerDialogOpen(false);
+            setEditingWholesaler(null);
+        }
+    }
+
+    const handleDeleteWholesaler = async (id: string) => {
+        if (!firestore) return;
+        setIsLoading(true);
+        try {
+            const docRef = doc(firestore, 'wholesalers', id);
+            await updateDoc(docRef, { parentWholesalerId: null });
+            toast({ title: "Επιτυχής Αποσύνδεση" });
+        } catch (e) {
+            console.error(e);
+            toast({ variant: "destructive", title: "Σφάλμα" });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
     // --- CSV Import Handlers ---
     const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -518,14 +659,19 @@ export default function AdminCustomersPage() {
     };
 
     const handleSendDeliveryNotification = async () => {
-        if (!firestore || !wholesaler || activeTab === 'all') return;
+        if (!firestore || !wholesaler) return;
         
-        const dayCustomers = customers.filter(c => c.deliveryDay === activeTab);
+        const dayCustomers = activeTab === 'all' 
+            ? customers 
+            : customers.filter(c => c.deliveryDay?.split(',').map(s => s.trim()).includes(activeTab));
+
         if (dayCustomers.length === 0) {
             toast({
                 variant: 'destructive',
                 title: 'Κενή Λίστα',
-                description: `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
+                description: activeTab === 'all' 
+                    ? 'Δεν υπάρχουν πελάτες για να σταλεί ειδοποίηση.'
+                    : `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
             });
             return;
         }
@@ -572,7 +718,8 @@ export default function AdminCustomersPage() {
                         body: JSON.stringify({
                             recipientUid: uid,
                             title,
-                            body: description
+                            body: description,
+                            link: `/notifications?id=${notifRef.id}`
                         })
                     }).catch(e => console.error('[DEBUG] Push notification trigger failed for', uid, e));
                 });
@@ -584,7 +731,9 @@ export default function AdminCustomersPage() {
                 console.log("[DEBUG] Batch commit successful!");
                 toast({
                     title: 'Επιτυχία!',
-                    description: `Στάλθηκαν ${totalNotifications} ειδοποιήσεις υπενθύμισης για την ${activeTab}.`
+                    description: activeTab === 'all'
+                        ? `Στάλθηκαν ${totalNotifications} ειδοποιήσεις υπενθύμισης σε όλους τους πελάτες.`
+                        : `Στάλθηκαν ${totalNotifications} ειδοποιήσεις υπενθύμισης για την ${activeTab}.`
                 });
             } else {
                  toast({
@@ -616,7 +765,7 @@ export default function AdminCustomersPage() {
     };
 
     const handleSendCustomNotification = async () => {
-        if (!firestore || !wholesaler || activeTab === 'all' || !customNotifTitle || !customNotifBody) {
+        if (!firestore || !wholesaler || !customNotifTitle || !customNotifBody) {
              toast({
                 variant: 'destructive',
                 title: 'Ελλιπή στοιχεία',
@@ -625,12 +774,17 @@ export default function AdminCustomersPage() {
             return;
         }
         
-        const dayCustomers = customers.filter(c => c.deliveryDay === activeTab);
+        const dayCustomers = activeTab === 'all' 
+            ? customers 
+            : customers.filter(c => c.deliveryDay?.split(',').map(s => s.trim()).includes(activeTab));
+
         if (dayCustomers.length === 0) {
             toast({
                 variant: 'destructive',
                 title: 'Κενή Λίστα',
-                description: `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
+                description: activeTab === 'all'
+                    ? 'Δεν υπάρχουν πελάτες για να σταλεί ειδοποίηση.'
+                    : `Δεν υπάρχουν πελάτες την ${activeTab} για να σταλεί ειδοποίηση.`
             });
             return;
         }
@@ -672,7 +826,8 @@ export default function AdminCustomersPage() {
                         body: JSON.stringify({
                             recipientUid: uid,
                             title: customNotifTitle,
-                            body: customNotifBody
+                            body: customNotifBody,
+                            link: `/notifications?id=${notifRef.id}`
                         })
                     }).catch(e => console.error('[DEBUG] Push notification failed', e));
                 });
@@ -747,383 +902,484 @@ export default function AdminCustomersPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-lg font-semibold md:text-2xl">Πελάτες</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h1 className="text-xl sm:text-2xl font-bold">
+                    {mainTab === 'customers' ? 'Πελάτες' : 'Υπο-Προμηθευτές'}
+                </h1>
             </div>
 
-            {/* Pending Join Requests */}
-            {allPendingRequests.length > 0 && (
-                <Card className="border-amber-500/50 bg-amber-500/5">
-                    <CardHeader>
-                        <div className="flex items-center gap-2">
-                            <Bell className="h-5 w-5 text-amber-500" />
-                            <CardTitle className="text-amber-500">Εκκρεμή Αιτήματα Σύνδεσης</CardTitle>
-                            <Badge variant="secondary" className="bg-amber-500 text-white">{allPendingRequests.length}</Badge>
-                        </div>
-                        <CardDescription>
-                            Χρήστες που ζητούν πρόσβαση στην επιχείρησή σας. Εγκρίνετε ή απορρίψτε τα αιτήματα.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Όνομα</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Επιχείρηση</TableHead>
-                                    <TableHead>Ημερομηνία</TableHead>
-                                    <TableHead className="text-right">Ενέργειες</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {allPendingRequests.map((request) => (
-                                    <TableRow key={request.id}>
-                                        <TableCell className="font-medium">{request.requesterName}</TableCell>
-                                        <TableCell className="text-muted-foreground">{request.requesterEmail}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">
-                                                {request.businessType === 'store' ? '🏪 Κατάστημα' : '🏭 Προμηθευτής'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                            {new Date(request.createdAt).toLocaleDateString('el-GR')}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
-                                                    onClick={() => handleApproveRequest(request)}
-                                                    disabled={isProcessingRequest === request.id}
-                                                >
-                                                    {isProcessingRequest === request.id ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <CheckCircle2 className="h-4 w-4 mr-1" />
-                                                    )}
-                                                    Έγκριση
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="text-destructive border-destructive hover:bg-destructive hover:text-white"
-                                                    onClick={() => handleRejectRequest(request)}
-                                                    disabled={isProcessingRequest === request.id}
-                                                >
-                                                    <XCircle className="h-4 w-4 mr-1" />
-                                                    Απόρριψη
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-            )}
+            <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
+                <TabsList className="mb-6 grid w-full grid-cols-2 max-w-none sm:max-w-md">
+                    <TabsTrigger value="customers" className="font-bold">Πελάτες</TabsTrigger>
+                    <TabsTrigger value="subsuppliers" className="font-bold">Υπο-Προμηθευτές</TabsTrigger>
+                </TabsList>
 
-            {/* Customer List */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div>
-                        <CardTitle>Λίστα Πελατών</CardTitle>
-                        <CardDescription>
-                            Διαχειριστείτε τους πελάτες της επιχείρησής σας ανα ημέρα παράδοσης.
-                        </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" className="relative h-9 px-4 text-xs sm:text-sm" disabled={!wholesaler}>
-                            <FileSpreadsheet className="mr-2 h-4 w-4" />
-                            Εισαγωγή
-                            <input
-                                type="file"
-                                className="absolute inset-0 opacity-0 cursor-pointer"
-                                accept=".csv,.txt,.xls,.xlsx"
-                                onChange={handleCsvUpload}
-                                disabled={!wholesaler}
-                            />
-                        </Button>
-                        <Button onClick={openDialogForNew} disabled={!wholesaler} className="h-9 px-4 text-xs sm:text-sm">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Νέος Πελάτης
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                   <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
-                           <TabsList className="bg-muted/30 p-1.5 rounded-2xl h-auto flex flex-wrap gap-1 justify-start border border-muted shadow-sm">
-                               <TabsTrigger 
-                                    value="all" 
-                                    className="rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
-                               >
-                                   Όλοι
-                               </TabsTrigger>
-                               {DAYS_OF_WEEK.map(day => (
-                                   <TabsTrigger 
-                                        key={day} 
-                                        value={day} 
-                                        className="rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
-                                   >
-                                       {day}
-                                   </TabsTrigger>
-                               ))}
-                           </TabsList>
-                           <Button 
-                                variant="outline" 
-                                className="h-11 px-6 border-primary/20 hover:bg-primary/5 font-bold shadow-sm flex-shrink-0"
-                                onClick={() => handleExportExcel(activeTab === 'all' ? undefined : activeTab)}
-                                disabled={combinedLoading}
-                           >
-                               <Download className="mr-2 h-5 w-5 text-primary" />
-                               Εξαγωγή {activeTab === 'all' ? 'Όλων των Πελατών' : activeTab}
-                           </Button>
-                       </div>
-
-                       {activeTab !== 'all' && (
-                            <div className="mb-6 space-y-3 animate-in fade-in slide-in-from-top-2">
-                                <Button 
-                                    className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-lg shadow-amber-500/20 gap-2 border-none transition-all active:scale-95"
-                                    onClick={handleSendDeliveryNotification}
-                                    disabled={isSendingNotifications || combinedLoading}
-                                >
-                                    {isSendingNotifications ? (
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                    ) : (
-                                        <Bell className="h-5 w-5" />
-                                    )}
-                                    Στείλε ειδοποίηση για Παραγγελία ({activeTab})
-                                </Button>
-                                
-                                <Button 
-                                    variant="outline"
-                                    className="w-full h-12 border-blue-600 text-blue-600 hover:bg-blue-50 font-bold rounded-2xl shadow-sm gap-2 transition-all active:scale-95"
-                                    onClick={() => setIsCustomNotifDialogOpen(true)}
-                                    disabled={combinedLoading}
-                                >
-                                    <PlusCircle className="h-5 w-5" />
-                                    Αποστολή Προσαρμοσμένου Μηνύματος ({activeTab})
-                                </Button>
-
-                                <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                                    Θα σταλεί άμεση ειδοποίηση σε όλους τους εγγεγραμμένους χρήστες των καταστημάτων της {activeTab}.
-                                </p>
-                            </div>
-                       )}
-
-                       {indexErrorLink && (
-                            <Card className="mb-6 border-red-500 bg-red-500/10 animate-in zoom-in-95">
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-center gap-2 text-red-600">
-                                        <Bell className="h-5 w-5" />
-                                        <CardTitle className="text-sm font-bold">Απαιτείται Ρύθμιση Βάσης Δεδομένων</CardTitle>
-                                    </div>
-                                    <CardDescription className="text-red-600/80">
-                                        Για να λειτουργήσουν οι ειδοποιήσεις, πρέπει να δημιουργήσετε ένα ευρετήριο (Index) στο Firebase.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <Button 
-                                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold"
-                                        onClick={() => window.open(indexErrorLink, '_blank')}
-                                    >
-                                        Δημιουργία Index Τώρα
-                                    </Button>
-                                    <p className="text-[10px] mt-2 text-center opacity-70">
-                                        Το link περιέχει όλες τις απαραίτητες παραμέτρους αυτόματα.
-                                    </p>
-                                </CardContent>
-                            </Card>
-                       )}
-
-                       <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Επωνυμία</TableHead>
-                                    <TableHead>Υπεύθυνος</TableHead>
-                                    <TableHead className="hidden sm:table-cell">Τηλέφωνο</TableHead>
-                                    <TableHead className="hidden md:table-cell">Ημέρα Παράδοσης</TableHead>
-                                    <TableHead className="text-right">Ενέργειες</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {combinedLoading && (
-                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center">
-                                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                                {!combinedLoading && customers
-                                    .filter(c => activeTab === 'all' || c.deliveryDay === activeTab)
-                                    .map((customer) => {
-                                        const getCustomerMessages = () => {
-                                            const messages: {id: string, title: string, date: any}[] = [];
-                                            const uids = [customer.ownerId, ...(customer.managerUids || [])].filter(Boolean) as string[];
-                                            
-                                            uids.forEach(uid => {
-                                                const userMessages = acknowledgedMessages.get(uid) || [];
-                                                userMessages.forEach(msg => {
-                                                    if (!messages.find(m => m.id === msg.id)) {
-                                                        messages.push(msg);
-                                                    }
-                                                });
-                                            });
-
-                                            // Sort by date descending and take top 5
-                                            return messages
-                                                .sort((a, b) => b.date.getTime() - a.date.getTime())
-                                                .slice(0, 5);
-                                        };
-
-                                        const acknowledgedList = getCustomerMessages();
-
-                                        return (
-                                            <TableRow 
-                                                key={customer.id} 
-                                                className="cursor-pointer hover:bg-muted/50"
-                                                onClick={(e) => {
-                                                    if ((e.target as HTMLElement).closest('button')) return;
-                                                    router.push(`/admin/customers/${customer.id}`);
-                                                }}
-                                            >
-                                                <TableCell className="font-medium p-4">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <span className="text-base font-bold">{customer.businessName}</span>
-                                                        
-                                                        {acknowledgedList.length > 0 && (
-                                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                                {acknowledgedList.map((msg) => (
-                                                                    <Badge 
-                                                                        key={msg.id} 
-                                                                        variant="outline" 
-                                                                        className="bg-emerald-500/15 border-emerald-500/40 text-emerald-400 gap-1.5 py-1 px-2.5 text-[10px] font-bold transition-all hover:bg-emerald-500/25 shadow-sm"
-                                                                    >
-                                                                        <Check className="h-3 w-3 stroke-[3px]" />
-                                                                        <span className="opacity-90 tracking-tight">ΕΝΗΜΕΡΩΘΗΚΕ:</span>
-                                                                        <span className="text-white drop-shadow-sm">{msg.title}</span>
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>{customer.ownerName}</TableCell>
-                                                <TableCell className="hidden sm:table-cell text-muted-foreground">{customer.phone}</TableCell>
-                                                <TableCell className="hidden md:table-cell">
-                                                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
-                                                        {customer.deliveryDay}
+                <TabsContent value="customers" className="space-y-6">
+                    {/* Pending Join Requests */}
+                    {allPendingRequests.length > 0 && (
+                        <Card className="border-amber-500/50 bg-amber-500/5">
+                            <CardHeader>
+                                <div className="flex items-center gap-2">
+                                    <Bell className="h-5 w-5 text-amber-500" />
+                                    <CardTitle className="text-amber-500">Εκκρεμή Αιτήματα Σύνδεσης</CardTitle>
+                                    <Badge variant="secondary" className="bg-amber-500 text-white">{allPendingRequests.length}</Badge>
+                                </div>
+                                <CardDescription>
+                                    Χρήστες που ζητούν πρόσβαση στην επιχείρησή σας. Εγκρίνετε ή απορρίψτε τα αιτήματα.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Όνομα</TableHead>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Επιχείρηση</TableHead>
+                                            <TableHead>Ημερομηνία</TableHead>
+                                            <TableHead className="text-right">Ενέργειες</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {allPendingRequests.map((request) => (
+                                            <TableRow key={request.id}>
+                                                <TableCell className="font-medium">{request.requesterName}</TableCell>
+                                                <TableCell className="text-muted-foreground">{request.requesterEmail}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline">
+                                                        {request.businessType === 'store' ? '🏪 Κατάστημα' : '🏭 Προμηθευτής'}
                                                     </Badge>
                                                 </TableCell>
+                                                <TableCell className="text-muted-foreground text-sm">
+                                                    {new Date(request.createdAt).toLocaleDateString('el-GR')}
+                                                </TableCell>
                                                 <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                                            <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-muted font-bold">
-                                                                <span className="sr-only">Open menu</span>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="rounded-xl">
-                                                            <DropdownMenuItem className="cursor-pointer font-bold" onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openDialogForEdit(customer);
-                                                            }}>
-                                                                Επεξεργασία
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem 
-                                                                className="text-destructive cursor-pointer font-bold"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteCustomer(customer.id);
-                                                                }}
-                                                            >
-                                                                Διαγραφή
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="text-green-600 border-green-600 hover:bg-green-600 hover:text-white"
+                                                            onClick={() => handleApproveRequest(request)}
+                                                            disabled={isProcessingRequest === request.id}
+                                                        >
+                                                            {isProcessingRequest === request.id ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                                            )}
+                                                            Έγκριση
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+                                                            onClick={() => handleRejectRequest(request)}
+                                                            disabled={isProcessingRequest === request.id}
+                                                        >
+                                                            <XCircle className="h-4 w-4 mr-1" />
+                                                            Απόρριψη
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
-                                        );
-                                    })
-                                }
-                                {!combinedLoading && customers.filter(c => activeTab === 'all' || c.deliveryDay === activeTab).length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                            {activeTab === 'all' 
-                                                ? 'Δεν έχετε προσθέσει ακόμα πελάτες.' 
-                                                : `Δεν υπάρχουν πελάτες για την ${activeTab}.`}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                       </Table>
-                   </Tabs>
-                </CardContent>
-            </Card>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
-             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                     {isDialogOpen && (
-                         <CustomerForm 
-                            customer={editingCustomer}
-                            onSave={handleSaveCustomer}
-                            onCancel={() => {
-                                setIsDialogOpen(false);
-                                setEditingCustomer(null);
-                            }}
-                         />
-                     )}
+                    {/* Customer List */}
+                    <Card>
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
+                            <div>
+                                <CardTitle>Λίστα Πελατών</CardTitle>
+                                <CardDescription>
+                                    Διαχειριστείτε τους πελάτες της επιχείρησής σας ανα ημέρα παράδοσης.
+                                </CardDescription>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <Button variant="outline" className="relative h-9 px-4 text-xs sm:text-sm flex-1 sm:flex-none" disabled={!wholesaler}>
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                    Εισαγωγή
+                                    <input
+                                        type="file"
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        accept=".csv,.txt,.xls,.xlsx"
+                                        onChange={handleCsvUpload}
+                                        disabled={!wholesaler}
+                                    />
+                                </Button>
+                                <Button onClick={openDialogForNew} disabled={!wholesaler} className="h-9 px-4 text-xs sm:text-sm flex-1 sm:flex-none">
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Νέος Πελάτης
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                           <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+                                   <TabsList className="bg-muted/30 p-1.5 rounded-2xl h-auto flex overflow-x-auto no-scrollbar gap-1 justify-start border border-muted shadow-sm">
+                                       <TabsTrigger 
+                                            value="all" 
+                                            className="rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
+                                       >
+                                           Όλοι
+                                       </TabsTrigger>
+                                       {DAYS_OF_WEEK.map(day => (
+                                           <TabsTrigger 
+                                                key={day} 
+                                                value={day} 
+                                                className="rounded-xl px-4 py-2.5 text-sm font-bold flex-shrink-0 transition-all duration-200 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-primary/5"
+                                           >
+                                               {day}
+                                           </TabsTrigger>
+                                       ))}
+                                   </TabsList>
+                                   <Button 
+                                        variant="outline" 
+                                        className="h-11 px-6 border-primary/20 hover:bg-primary/5 font-bold shadow-sm flex-shrink-0"
+                                        onClick={() => handleExportExcel(activeTab === 'all' ? undefined : activeTab)}
+                                        disabled={combinedLoading}
+                                   >
+                                       <Download className="mr-2 h-5 w-5 text-primary" />
+                                       Εξαγωγή {activeTab === 'all' ? 'Όλων των Πελατών' : activeTab}
+                                   </Button>
+                               </div>
+
+                                {activeTab !== 'all' && (
+                                    <div className="mb-6 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                        <Button 
+                                            className="w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-lg shadow-amber-500/20 gap-2 border-none transition-all active:scale-95"
+                                            onClick={handleSendDeliveryNotification}
+                                            disabled={isSendingNotifications || combinedLoading}
+                                        >
+                                            {isSendingNotifications ? (
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                            ) : (
+                                                <Bell className="h-5 w-5" />
+                                            )}
+                                            Στείλε ειδοποίηση για Παραγγελία ({activeTab})
+                                        </Button>
+                                        
+                                        <Button 
+                                            variant="outline"
+                                            className="w-full h-12 border-blue-600 text-blue-600 hover:bg-blue-50 font-bold rounded-2xl shadow-sm gap-2 transition-all active:scale-95"
+                                            onClick={() => setIsCustomNotifDialogOpen(true)}
+                                            disabled={combinedLoading}
+                                        >
+                                            <PlusCircle className="h-5 w-5" />
+                                            Αποστολή Προσαρμοσμένου Μηνύματος ({activeTab})
+                                        </Button>
+
+                                        <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                                            Θα σταλεί άμεση ειδοποίηση σε όλους τους εγγεγραμμένους χρήστες των καταστημάτων της {activeTab}.
+                                        </p>
+                                    </div>
+                               )}
+
+                               {indexErrorLink && (
+                                    <Card className="mb-6 border-red-500 bg-red-500/10 animate-in zoom-in-95">
+                                        <CardHeader className="pb-2">
+                                            <div className="flex items-center gap-2 text-red-600">
+                                                <Bell className="h-5 w-5" />
+                                                <CardTitle className="text-sm font-bold">Απαιτείται Ρύθμιση Βάσης Δεδομένων</CardTitle>
+                                            </div>
+                                            <CardDescription className="text-red-600/80">
+                                                Για να λειτουργήσουν οι ειδοποιήσεις, πρέπει να δημιουργήσετε ένα ευρετήριο (Index) στο Firebase.
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Button 
+                                                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold"
+                                                onClick={() => window.open(indexErrorLink, '_blank')}
+                                            >
+                                                Δημιουργία Index Τώρα
+                                            </Button>
+                                            <p className="text-[10px] mt-2 text-center opacity-70">
+                                                Το link περιέχει όλες τις απαραίτητες παραμέτρους αυτόματα.
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                               )}
+
+                               <div className="overflow-x-auto -mx-4 sm:mx-0">
+                               <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Επωνυμία</TableHead>
+                                            <TableHead>Υπεύθυνος</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Τηλέφωνο</TableHead>
+                                            <TableHead className="hidden md:table-cell">Ημέρα Παράδοσης</TableHead>
+                                            <TableHead className="text-right">Ενέργειες</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {combinedLoading && (
+                                             <TableRow>
+                                                <TableCell colSpan={5} className="h-24 text-center">
+                                                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        {!combinedLoading && customers
+                                            .filter(c => activeTab === 'all' || c.deliveryDay?.split(',').map(s => s.trim()).includes(activeTab))
+                                            .map((customer) => {
+                                                const getCustomerMessages = () => {
+                                                    const messages: {id: string, title: string, date: any, isAcknowledged: boolean}[] = [];
+                                                    const uids = [customer.ownerId, ...(customer.managerUids || [])].filter(Boolean) as string[];
+                                                    
+                                                    uids.forEach(uid => {
+                                                        const userMessages = customerNotifications.get(uid) || [];
+                                                        userMessages.forEach(msg => {
+                                                            if (!messages.find(m => m.id === msg.id)) {
+                                                                messages.push(msg);
+                                                            }
+                                                        });
+                                                    });
+                                                    
+                                                    return messages
+                                                        .sort((a, b) => b.date.getTime() - a.date.getTime())
+                                                        .slice(0, 5);
+                                                };
+                         
+                                                const notificationList = getCustomerMessages();
+
+                                                return (
+                                                    <TableRow 
+                                                        key={customer.id} 
+                                                        className="cursor-pointer hover:bg-muted/50"
+                                                        onClick={(e) => {
+                                                            if ((e.target as HTMLElement).closest('button')) return;
+                                                            router.push(`/admin/customers/${customer.id}`);
+                                                        }}
+                                                    >
+                                                        <TableCell className="font-medium p-4">
+                                                            <div className="flex flex-col gap-1.5">
+                                                                <span className="text-base font-bold">{customer.businessName}</span>
+                                                                
+                                                                {notificationList.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                                        {notificationList.map((msg) => (
+                                                                            <Badge 
+                                                                                key={msg.id} 
+                                                                                variant="outline" 
+                                                                                className={cn(
+                                                                                    "gap-1.5 py-1 px-2.5 text-[10px] font-bold transition-all shadow-sm",
+                                                                                    msg.isAcknowledged 
+                                                                                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25" 
+                                                                                        : "bg-red-500/15 border-red-500/40 text-red-500 hover:bg-red-500/25"
+                                                                                )}
+                                                                            >
+                                                                                {msg.isAcknowledged ? (
+                                                                                    <Check className="h-3 w-3 stroke-[3px]" />
+                                                                                ) : (
+                                                                                    <Bell className="h-3 w-3 text-red-500" />
+                                                                                )}
+                                                                                <span className="opacity-90 tracking-tight">
+                                                                                    {msg.isAcknowledged ? 'ΕΝΗΜΕΡΩΘΗΚΕ:' : 'ΕΚΚΡΕΜΕΙ:'}
+                                                                                </span>
+                                                                                <span className={cn(
+                                                                                    "drop-shadow-sm",
+                                                                                    msg.isAcknowledged ? "text-white" : "text-red-500"
+                                                                                )}>{msg.title}</span>
+                                                                            </Badge>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>{customer.ownerName}</TableCell>
+                                                        <TableCell className="hidden sm:table-cell">{customer.phone}</TableCell>
+                                                        <TableCell className="hidden md:table-cell">
+                                                            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 font-bold">
+                                                                {customer.deliveryDay}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
+                                                                    <DropdownMenuItem className="cursor-pointer rounded-lg font-medium" onClick={() => router.push(`/admin/customers/${customer.id}`)}>
+                                                                        Προβολή
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem className="cursor-pointer rounded-lg font-medium" onClick={() => openDialogForEdit(customer)}>
+                                                                        Επεξεργασία
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem className="cursor-pointer rounded-lg font-medium text-destructive" onClick={() => handleDeleteCustomer(customer.id)}>
+                                                                        Διαγραφή
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                    </TableBody>
+                                </Table>
+                                </div>
+                           </Tabs>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="subsuppliers" className="space-y-6">
+                    <Card>
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
+                            <div>
+                                <CardTitle>Υπο-Προμηθευτές</CardTitle>
+                                <CardDescription>
+                                    Διαχειριστείτε τους προμηθευτές που ανήκουν στο δίκτυό σας.
+                                </CardDescription>
+                            </div>
+                            <Button onClick={() => { setEditingWholesaler({}); setIsWholesalerDialogOpen(true); }} disabled={!wholesaler} className="w-full sm:w-auto h-9 px-4 text-xs sm:text-sm">
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Νέος Υπο-Προμηθευτής
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto -mx-4 sm:mx-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Εταιρεία</TableHead>
+                                        <TableHead>Υπεύθυνος</TableHead>
+                                        <TableHead className="hidden sm:table-cell">ΑΦΜ</TableHead>
+                                        <TableHead className="hidden md:table-cell">Email</TableHead>
+                                        <TableHead className="text-right">Ενέργειες</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoadingSubSuppliers && (
+                                         <TableRow>
+                                            <TableCell colSpan={5} className="h-24 text-center">
+                                                <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    {!isLoadingSubSuppliers && subSuppliers?.map((sub) => (
+                                        <TableRow 
+                                            key={sub.id} 
+                                            className="cursor-pointer hover:bg-muted/50"
+                                            onClick={(e) => {
+                                                if ((e.target as HTMLElement).closest('button')) return;
+                                                router.push(`/admin/customers/${sub.id}?type=wholesaler`);
+                                            }}
+                                        >
+                                            <TableCell className="font-bold">{sub.companyName}</TableCell>
+                                            <TableCell>{sub.ownerName}</TableCell>
+                                            <TableCell className="hidden sm:table-cell">{sub.taxId}</TableCell>
+                                            <TableCell className="hidden md:table-cell">{sub.email}</TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
+                                                        <DropdownMenuItem className="cursor-pointer rounded-lg font-medium" onClick={() => router.push(`/admin/customers/${sub.id}?type=wholesaler`)}>
+                                                            Προϊόντα
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="cursor-pointer rounded-lg font-medium" onClick={() => { setEditingWholesaler(sub); setIsWholesalerDialogOpen(true); }}>
+                                                            Επεξεργασία
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="cursor-pointer rounded-lg font-medium text-destructive" onClick={() => handleDeleteWholesaler(sub.id)}>
+                                                            Αποσύνδεση
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {!isLoadingSubSuppliers && (!subSuppliers || subSuppliers.length === 0) && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                                Δεν βρέθηκαν υπο-προμηθευτές.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+
+            {/* Dialogs */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <CustomerForm 
+                        customer={editingCustomer} 
+                        onSave={handleSaveCustomer} 
+                        onCancel={() => setIsDialogOpen(false)} 
+                    />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isWholesalerDialogOpen} onOpenChange={setIsWholesalerDialogOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <WholesalerForm 
+                        wholesaler={editingWholesaler} 
+                        onSave={handleSaveWholesaler} 
+                        onCancel={() => setIsWholesalerDialogOpen(false)} 
+                    />
                 </DialogContent>
             </Dialog>
 
             <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col">
                     <DialogHeader>
-                        <DialogTitle>Προεπισκόπηση Εισαγωγής Πελατών</DialogTitle>
+                        <DialogTitle>Επιβεβαίωση Εισαγωγής</DialogTitle>
                         <DialogDescription>
-                            Βρέθηκαν {parsedCustomers.length} πελάτες στο αρχείο. Ελέγξτε και επιβεβαιώστε.
+                            Βρέθηκαν {parsedCustomers.length} πελάτες στο αρχείο. Επιβεβαιώστε τα στοιχεία για εισαγωγή.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="max-h-[400px] overflow-y-auto border rounded-md">
-                        <table className="w-full text-sm">
-                            <thead className="bg-muted/50 sticky top-0">
-                                <tr>
-                                    <th className="p-2 text-left font-medium">Επωνυμία</th>
-                                    <th className="p-2 text-left font-medium">Υπεύθυνος</th>
-                                    <th className="p-2 text-left font-medium">Τηλ.</th>
-                                    <th className="p-2 text-left font-medium">Ημέρα</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {parsedCustomers.map((c, i) => (
-                                    <tr key={i} className="hover:bg-muted/30">
-                                        <td className="p-2 font-medium">{c.businessName}</td>
-                                        <td className="p-2">{c.ownerName || '-'}</td>
-                                        <td className="p-2 text-xs">{c.phone || '-'}</td>
-                                        <td className="p-2 text-xs">{c.deliveryDay}</td>
-                                    </tr>
+                    <div className="flex-1 overflow-auto py-4">
+                        <div className="overflow-x-auto -mx-4 sm:mx-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Επωνυμία</TableHead>
+                                    <TableHead>Υπεύθυνος</TableHead>
+                                    <TableHead>Τηλέφωνο</TableHead>
+                                    <TableHead>Ημέρα</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {parsedCustomers.map((pc, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell className="font-medium">{pc.businessName}</TableCell>
+                                        <TableCell>{pc.ownerName}</TableCell>
+                                        <TableCell>{pc.phone}</TableCell>
+                                        <TableCell>{pc.deliveryDay}</TableCell>
+                                    </TableRow>
                                 ))}
-                            </tbody>
-                        </table>
+                            </TableBody>
+                        </Table>
+                        </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setIsImportDialogOpen(false); setParsedCustomers([]); }}>Ακύρωση</Button>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setIsImportDialogOpen(false)} disabled={isImporting}>Ακύρωση</Button>
                         <Button onClick={handleConfirmImport} disabled={isImporting}>
-                            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                            Εισαγωγή {parsedCustomers.length} Πελατών
+                            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                            Επιβεβαίωση Εισαγωγής
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Custom Notification Dialog */}
             <Dialog open={isCustomNotifDialogOpen} onOpenChange={setIsCustomNotifDialogOpen}>
-                <DialogContent className="sm:max-w-[500px] rounded-3xl">
+                <DialogContent className="sm:max-w-[425px] rounded-3xl">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Bell className="h-5 w-5 text-blue-500" />
-                            Αποστολή Μηνύματος ({activeTab})
-                        </DialogTitle>
+                        <DialogTitle>Προσαρμοσμένη Ειδοποίηση</DialogTitle>
                         <DialogDescription>
                             Στείλτε μια προσαρμοσμένη ειδοποίηση σε όλους τους πελάτες της {activeTab}.
                         </DialogDescription>

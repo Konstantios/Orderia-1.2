@@ -8,8 +8,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Camera, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Product, Customer, CustomerInventoryItem } from '@/lib/types';
+import type { Product, Customer, CustomerInventoryItem, StoreProductConfiguration } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 // Define BarcodeDetector for TypeScript
@@ -56,10 +57,11 @@ const playBeep = () => {
     }
 };
 
-export function InventoryExit({ products, customer, inventory, onSync }: { products: Product[]; customer: Customer; inventory: CustomerInventoryItem[], onSync: (scannedItems: Record<string, number>) => void }) {
+export function InventoryExit({ products, customer, inventory, productConfigs, isLoading, onSync }: { products: Product[]; customer: Customer; inventory: CustomerInventoryItem[], productConfigs?: StoreProductConfiguration[], isLoading?: boolean, onSync: (scannedItems: Record<string, number>) => void }) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [scannedItems, setScannedItems] = useState<Record<string, number>>({});
+  const [lastSyncedIds, setLastSyncedIds] = useState<Set<string>>(new Set());
   
   const [productForConfirmation, setProductForConfirmation] = useState<Product | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
 
   const handleSync = () => {
     onSync(scannedItems);
+    setLastSyncedIds(new Set(Object.keys(scannedItems)));
     setScannedItems({});
   };
 
@@ -79,9 +82,23 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
     const invField = inventory.find(i => i.productId === product.id);
     const inv = invDoc || invField;
     const currentStock = inv?.currentStock || 0;
-    const idealStock = 0;
+    
+    // Fetch ideal stock from configs
+    const idealStock = productConfigs?.find(i => i.id === product.id)?.idealStock 
+                    ?? productConfigs?.find(i => i.productId === product.id)?.idealStock 
+                    ?? 0;
+                    
     return { product, idealStock, currentStock };
-  }), [products, inventory]);
+  }), [products, inventory, productConfigs]);
+
+  if (isLoading) {
+    return (
+        <Card className="p-8 flex flex-col items-center justify-center gap-4 bg-card/50">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Φόρτωση ρυθμίσεων αποθέματος...</p>
+        </Card>
+    );
+  }
 
   const handleConfirmScan = () => {
     if (!productForConfirmation) return;
@@ -156,7 +173,7 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
                 if (newScannedCode !== lastScannedCode) {
                     setLastScannedCode(newScannedCode); // Prevent immediate re-scan of the same code
                     playBeep();
-                    const product = products.find(p => p.code === newScannedCode);
+                    const product = products.find(p => p.code === newScannedCode || p.barcode === newScannedCode);
                     if (product) {
                         setProductForConfirmation(product);
                     } else {
@@ -208,31 +225,41 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
             <div className="absolute inset-0 bg-black/50"></div>
             
             {/* Futuristic Scanning HUD */}
-            <div className="relative w-11/12 max-w-sm aspect-square bg-transparent rounded-3xl border border-white/20 shadow-2xl overflow-hidden ring-4 ring-black/20 z-10 animate-in zoom-in-95 duration-500">
-                {/* Moving Laser Line */}
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
-                
-                {/* Scanner Viewfinder Corners */}
-                <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
-                
-                {/* Cyberpunk HUD Labels */}
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
-                   Auto-Detection Active
-                </div>
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
-                   Align Barcode Here
-                </div>
+            <div className="relative w-11/12 max-w-sm aspect-square z-10 animate-in zoom-in-95 duration-500">
+                {/* Close Button Docked to HUD Corner */}
+                <Button 
+                    onClick={() => setIsScanning(false)} 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute -top-3 -right-3 z-[100] bg-white hover:bg-white text-red-600 rounded-full h-10 w-10 shadow-2xl border-2 border-red-500 pointer-events-auto"
+                >
+                    <X className="h-6 w-6 stroke-[3]" />
+                </Button>
 
-                {/* Grid Effect Overlay */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                {/* Futuristic Scanning HUD Container */}
+                <div className="relative w-full h-full bg-transparent rounded-3xl border border-white/20 overflow-hidden ring-4 ring-black/20">
+                    {/* Moving Laser Line */}
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-red-500 shadow-[0_0_20px_4px_rgba(239,68,68,0.7)] animate-scan-line z-20"></div>
+                    
+                    {/* Scanner Viewfinder Corners */}
+                    <div className="absolute -top-1 -left-1 w-12 h-12 border-t-4 border-l-4 border-primary rounded-tl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                    <div className="absolute -top-1 -right-1 w-12 h-12 border-t-4 border-r-4 border-primary rounded-tr-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                    <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-4 border-l-4 border-primary rounded-bl-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                    <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-4 border-r-4 border-primary rounded-br-2xl shadow-[0_0_15px_rgba(105,153,235,0.4)]"></div>
+                    
+                    {/* Cyberpunk HUD Labels */}
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.3em] text-primary uppercase whitespace-nowrap drop-shadow-[0_0_10px_rgba(105,153,235,0.8)]">
+                       Auto-Detection Active
+                    </div>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-black tracking-[0.2em] text-white/50 uppercase whitespace-nowrap">
+                       Align Barcode Here
+                    </div>
+
+                    {/* Grid Effect Overlay */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                </div>
             </div>
           </div>
-          <Button onClick={() => setIsScanning(false)} variant="ghost" size="icon" className="absolute top-4 right-4 z-[110] bg-black/50 rounded-full h-10 w-10">
-            <X className="h-6 w-6 text-white" />
-          </Button>
           {hasCameraPermission === false && (
             <Alert variant="destructive" className="absolute bottom-20 w-11/12 max-w-md">
               <AlertTitle>Απαιτείται Πρόσβαση στην Κάμερα</AlertTitle>
@@ -242,7 +269,10 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
         </div>
       )}
 
-      <Card onClick={() => setIsScanning(true)} className="cursor-pointer bg-card overflow-hidden group">
+      <Card onClick={() => {
+        setLastSyncedIds(new Set());
+        setIsScanning(true);
+      }} className="cursor-pointer bg-card overflow-hidden group">
         <div className="relative h-36">
           {warehouseBg && <Image src={warehouseBg.imageUrl} layout="fill" alt="Warehouse" className="object-cover transition-transform duration-300 group-hover:scale-105" data-ai-hint={warehouseBg.imageHint} />}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
@@ -278,32 +308,41 @@ export function InventoryExit({ products, customer, inventory, onSync }: { produ
 
       <div className="space-y-3">
         {inventoryData
-          .filter(({ product }) => (scannedItems[product.id] || 0) > 0)
+          .filter(({ product }) => (scannedItems[product.id] || 0) > 0 || lastSyncedIds.has(product.id))
           .map(({ product, currentStock, idealStock }) => {
-          const scannedCount = scannedItems[product.id] || 0;
-          return (
-          <Card key={product.id} id={`exit-product-${product.id}`} className={cn("transition-all duration-300 bg-card/50", scannedCount > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background")}>
-            <div className={cn("p-3")}>
-              {currentStock <= idealStock / 3 && idealStock > 0 && <p className="text-xs font-bold uppercase text-destructive mb-1">Κρίσιμη Έλλειψη</p>}
-              <p className="text-xs text-muted-foreground">SKU: {product.code}</p>
-              <h4 className="font-semibold">{product.name}</h4>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-lg bg-accent/20 p-2">
-                  <p className="text-[11px] font-semibold uppercase text-accent/80">ΕΞΟΔΟΣ</p>
-                  <p className="text-2xl font-bold text-accent">{scannedCount}</p>
+            const scannedCount = scannedItems[product.id] || 0;
+            const isJustSynced = lastSyncedIds.has(product.id) && scannedCount === 0;
+
+            return (
+            <Card key={product.id} id={`exit-product-${product.id}`} className={cn(
+                "transition-all duration-300 bg-card/50", 
+                scannedCount > 0 && "ring-2 ring-accent ring-offset-2 ring-offset-background",
+                isJustSynced && "ring-2 ring-green-500/50"
+            )}>
+              <div className={cn("p-3")}>
+                <div className="flex justify-between items-start mb-1">
+                    {currentStock <= idealStock / 3 && idealStock > 0 && !isJustSynced && <p className="text-xs font-bold uppercase text-destructive">Κρίσιμη Έλλειψη</p>}
+                    {isJustSynced && <p className="text-[10px] font-bold uppercase bg-green-500 text-white px-2 py-0.5 rounded-full ml-auto animate-pulse">Συγχρονίστηκε</p>}
                 </div>
-                <div className={cn("rounded-lg p-2", getStockColor(currentStock, idealStock))}>
-                  <p className="text-[11px] font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
-                  <p className="text-2xl font-bold">{currentStock}</p>
-                </div>
-                <div className="rounded-lg bg-muted/30 p-2">
-                  <p className="text-[11px] font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
-                  <p className="text-2xl font-bold">{idealStock}</p>
+                <p className="text-xs text-muted-foreground">SKU: {product.code}</p>
+                <h4 className="font-semibold">{product.name}</h4>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg bg-accent/20 p-2">
+                    <p className="text-[11px] font-semibold uppercase text-accent/80">ΕΞΟΔΟΣ</p>
+                    <p className="text-2xl font-bold text-accent">{scannedCount}</p>
+                  </div>
+                  <div className={cn("rounded-lg p-2 transition-colors duration-500", getStockColor(currentStock, idealStock))}>
+                    <p className="text-[11px] font-semibold uppercase">ΑΠΟΘΕΜΑ</p>
+                    <p className="text-2xl font-bold">{currentStock}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-2">
+                      <p className="text-[11px] font-semibold uppercase text-muted-foreground">ΙΔΑΝΙΚΟ</p>
+                      <p className="text-2xl font-bold">{idealStock}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        )})}
+            </Card>
+          )})}
       </div>
       
       <Dialog open={!!productForConfirmation} onOpenChange={(open) => !open && handleCancelScan()}>

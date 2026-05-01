@@ -55,7 +55,7 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, firestore } = useFirebase();
-
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [scrollContainerRef] = useState(() => ({ current: null as HTMLElement | null }));
 
   const wholesalerQuery = useMemoFirebase(() => {
@@ -78,20 +78,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <SidebarContent className="flex-1">
                 <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
                     <SidebarMenu>
-                        {navItems.map(item => (
-                            <SidebarMenuItem key={item.href}>
-                                <SidebarMenuButton
-                                    asChild
-                                    isActive={pathname === item.href}
-                                    tooltip={item.label}
-                                >
-                                    <Link href={item.href}>
-                                        <item.icon />
-                                        <span>{item.label}</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        ))}
+                        {navItems.map(item => {
+                            const isActive = activeTab === item.href || (activeTab === null && pathname === item.href);
+                            return (
+                                <SidebarMenuItem key={item.href}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={isActive}
+                                        tooltip={item.label}
+                                        onClick={() => setActiveTab(item.href)}
+                                    >
+                                        <Link href={item.href}>
+                                            <item.icon />
+                                            <span>{item.label}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            );
+                        })}
                     </SidebarMenu>
                 </nav>
             </SidebarContent>
@@ -146,7 +150,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </header>
             <main 
                 ref={scrollContainerRef as any}
-                className="flex-1 overflow-y-auto p-4 lg:gap-6 lg:p-6"
+                className="flex-1 overflow-y-auto p-4 lg:gap-6 lg:p-6 pb-24 lg:pb-6"
             >
                 <PullToRefresh rootRef={scrollContainerRef as any}>
                     {children}
@@ -154,48 +158,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </main>
 
             {/* Σταθερή Κάτω Μπάρα Πλοήγησης για Κινητά */}
-            <nav className="lg:hidden shrink-0 border-t bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)] z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                 <div className="grid h-16 grid-cols-4 items-center justify-items-center">
-                    <Link
-                        href="/admin/dashboard"
-                        className={cn(
-                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
-                            pathname === '/admin/dashboard' ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                    >
-                        <Icons.dashboard className={cn("h-6 w-6 transition-transform", pathname === '/admin/dashboard' && "scale-110")} />
-                        <span>Ταμπλό</span>
-                    </Link>
-                    <Link
-                        href="/admin/orders"
-                        className={cn(
-                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
-                            pathname.startsWith('/admin/orders') ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                    >
-                        <Icons.newOrder className={cn("h-6 w-6 transition-transform", pathname.startsWith('/admin/orders') && "scale-110")} />
-                        <span>Παραγγελίες</span>
-                    </Link>
-                    <Link
-                        href="/admin/customers"
-                        className={cn(
-                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
-                            pathname === '/admin/customers' ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                    >
-                        <Icons.customers className={cn("h-6 w-6 transition-transform", pathname === '/admin/customers' && "scale-110")} />
-                        <span>Πελάτες</span>
-                    </Link>
-                    <Link
-                        href="/admin/warehouse"
-                        className={cn(
-                            'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors',
-                            pathname.startsWith('/admin/warehouse') ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                    >
-                        <Icons.warehouse className={cn("h-6 w-6 transition-transform", pathname.startsWith('/admin/warehouse') && "scale-110")} />
-                        <span>Αποθήκη</span>
-                    </Link>
+                    {[
+                        { href: '/admin/dashboard', label: 'Ταμπλό', icon: Icons.dashboard, match: '/admin/dashboard' },
+                        { href: '/admin/orders', label: 'Παραγγελίες', icon: Icons.newOrder, match: '/admin/orders' },
+                        { href: '/admin/customers', label: 'Πελάτες', icon: Icons.customers, match: '/admin/customers' },
+                        { href: '/admin/warehouse', label: 'Αποθήκη', icon: Icons.warehouse, match: '/admin/warehouse' },
+                    ].map((item) => {
+                        const isActive = activeTab === item.href || (activeTab === null && (pathname === item.href || pathname.startsWith(item.match)));
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setActiveTab(item.href)}
+                                className={cn(
+                                    'flex flex-col items-center justify-center gap-1 p-2 text-[10px] font-bold transition-colors w-full h-full',
+                                    isActive ? 'text-primary' : 'text-muted-foreground'
+                                )}
+                            >
+                                <item.icon className={cn("h-6 w-6 transition-transform", isActive && "scale-110")} />
+                                <span>{item.label}</span>
+                            </Link>
+                        );
+                    })}
                 </div>
             </nav>
         </SidebarInset>

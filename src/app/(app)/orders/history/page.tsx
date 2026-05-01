@@ -178,7 +178,7 @@ export default function OrderHistoryPage() {
 
   const OrderCard = ({ order }: { order: Order }) => (
     <Card key={order.id} className="overflow-hidden border-2 hover:border-primary/20 transition-all shadow-sm">
-      <CardHeader className="flex-row items-center justify-between bg-muted/30 py-3 px-4">
+      <CardHeader className="flex flex-row items-center justify-between bg-muted/30 py-3 px-4 gap-2">
         <div className="flex items-center gap-3">
             <div className={cn(
                 "p-2 rounded-full",
