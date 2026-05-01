@@ -32,25 +32,27 @@ self.addEventListener('notificationclick', (event) => {
     console.log('[SW] Notification click received', event.notification.data);
     event.notification.close();
 
-    const urlToOpen = new URL(event.notification.data?.link || '/notifications', self.location.origin).href;
+    // The data might be nested depending on how FCM sends it
+    const data = event.notification.data || {};
+    const link = data.link || data.fcm_options?.link || '/notifications';
+    const urlToOpen = new URL(link, self.location.origin).href;
 
     const promiseChain = clients.matchAll({
         type: 'window',
         includeUncontrolled: true
     }).then((windowClients) => {
-        // Look for any window client
+        // Look for an existing window client
+        for (const client of windowClients) {
+            if (client.url === urlToOpen && 'focus' in client) {
+                return client.focus();
+            }
+        }
+        // If no matching window is open, try to focus any and navigate or open new
         if (windowClients.length > 0) {
-            // Focus the first one and navigate it
             const client = windowClients[0];
             client.focus();
-            // Send message to the client to navigate
-            client.postMessage({
-                type: 'NAVIGATE',
-                url: urlToOpen
-            });
-            return;
+            return client.navigate(urlToOpen);
         } else {
-            // No window client, open a new one
             return clients.openWindow(urlToOpen);
         }
     });

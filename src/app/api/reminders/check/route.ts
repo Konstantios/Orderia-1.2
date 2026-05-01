@@ -245,11 +245,18 @@ export async function GET() {
                                             priority: 'high',
                                             notification: {
                                                 sound: 'default',
-                                                click_action: 'OPEN_ALARM'
+                                                click_action: 'OPEN_ALARM',
+                                                tag: 'order_reminder'
                                             }
                                         },
                                         webpush: {
                                             headers: { Urgency: 'high' },
+                                            notification: {
+                                                requireInteraction: true,
+                                                vibrate: [200, 100, 200, 100, 200, 100, 200],
+                                                icon: '/icons/icon-192x192.png',
+                                                tag: 'order_reminder'
+                                            },
                                             fcm_options: { link: '/orders/new?alarm=true' }
                                         },
                                         data: {
