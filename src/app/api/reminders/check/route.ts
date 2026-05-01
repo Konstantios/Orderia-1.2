@@ -266,7 +266,6 @@ export async function GET() {
                     triggeredResults.push({ ownerId, status: 'sent' });
                 }
             }
-        }
 
         return NextResponse.json({ 
             success: true, 
