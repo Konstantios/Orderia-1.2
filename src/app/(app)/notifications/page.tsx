@@ -15,7 +15,9 @@ import { cn } from '@/lib/utils';
 import type { Notification } from '@/lib/types';
 import { useEffect, useRef } from 'react';
 
-export default function NotificationsPage() {
+import { Suspense } from 'react';
+
+function NotificationsContent() {
   const { user, firestore } = useFirebase();
   const { toast } = useToast();
   const router = useRouter();
@@ -62,8 +64,6 @@ export default function NotificationsPage() {
     try {
       const batch = writeBatch(firestore);
       
-      // Group by wholesaler to minimize lookups if we were sending notifications back
-      // For simplicity in bulk, we just mark as acknowledged and read
       unread.forEach(n => {
         const updateData: any = { read: true };
         if (n.type === 'custom_message' && !(n as any).acknowledgedAt) {
@@ -86,13 +86,11 @@ export default function NotificationsPage() {
     if (!firestore || !user) return;
     setIsAcknowledging(notification.id);
     try {
-      // 1. Mark as acknowledged on the notification itself
       await updateDocumentNonBlocking(doc(firestore, 'notifications', notification.id), { 
         acknowledgedAt: serverTimestamp(),
         read: true 
       });
 
-      // 2. Fetch Wholesaler to get admin team UIDs
       const wholesalerRef = doc(firestore, 'wholesalers', notification.wholesalerId);
       const wholesalerSnap = await getDoc(wholesalerRef);
       
@@ -105,10 +103,8 @@ export default function NotificationsPage() {
         if (ownerId) recipientUids.add(ownerId);
         adminUids.forEach((uid: string) => recipientUids.add(uid));
 
-        // 3. Send notification to wholesaler admins
         const batch = writeBatch(firestore);
         const title = 'Επιβεβαίωση Ανάγνωσης';
-        // Need to find store name - we can assume user.displayName or fetch from stores
         const description = `Ο πελάτης επιβεβαίωσε ότι ενημερώθηκε για το μήνυμα: "${notification.title}"`;
         
         recipientUids.forEach(uid => {
@@ -123,11 +119,10 @@ export default function NotificationsPage() {
             wholesalerName: notification.wholesalerName,
             type: 'acknowledgement_received',
             createdAt: serverTimestamp(),
-            fromStoreId: '', // Ideally we'd have this
+            fromStoreId: '',
             fromUserId: user.uid
           });
 
-          // Trigger push notification to admin
           fetch('/api/notifications/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -185,7 +180,7 @@ export default function NotificationsPage() {
       </div>
 
       <div className="space-y-4">
-        {notifications && notifications.length > 0 ? (
+        {notifications && Array.isArray(notifications) && notifications.length > 0 ? (
           notifications.map((notification) => (
             <Card 
                 key={notification.id}
@@ -230,16 +225,31 @@ export default function NotificationsPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-primary/5 mt-2">
                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                         <span className="flex items-center gap-1 font-bold text-primary/80 bg-primary/5 px-2 py-0.5 rounded-md">
-                          {notification.wholesalerName}
+                          {notification.wholesalerName || 'Orderia'}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {(() => {
                             try {
-                              if (notification.createdAt && typeof (notification.createdAt as any).toDate === 'function') {
-                                return format(notification.createdAt.toDate(), 'eee, d MMM HH:mm', { locale: el });
-                              } else if (notification.date) {
-                                return format(new Date(notification.date), 'eee, d MMM HH:mm', { locale: el });
+                              if (notification.createdAt) {
+                                if (typeof (notification.createdAt as any).toDate === 'function') {
+                                    const date = notification.createdAt.toDate();
+                                    if (date instanceof Date && !isNaN(date.getTime())) {
+                                        return format(date, 'eee, d MMM HH:mm', { locale: el });
+                                    }
+                                } else if (typeof notification.createdAt === 'string' || typeof notification.createdAt === 'number') {
+                                    const date = new Date(notification.createdAt);
+                                    if (date instanceof Date && !isNaN(date.getTime())) {
+                                        return format(date, 'eee, d MMM HH:mm', { locale: el });
+                                    }
+                                }
+                              }
+                              
+                              if (notification.date) {
+                                const date = new Date(notification.date);
+                                if (date instanceof Date && !isNaN(date.getTime())) {
+                                    return format(date, 'eee, d MMM HH:mm', { locale: el });
+                                }
                               }
                             } catch (e) {
                               console.error('Error formatting date:', e);
@@ -312,5 +322,17 @@ export default function NotificationsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function NotificationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <NotificationsContent />
+    </Suspense>
   );
 }
