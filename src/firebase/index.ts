@@ -2,7 +2,7 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 import { getMessaging, isSupported } from 'firebase/messaging'
@@ -35,9 +35,18 @@ export function initializeFirebase() {
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  const auth = getAuth(firebaseApp);
+  
+  // Explicitly set persistence to local to prevent iOS PWAs from clearing session on close
+  if (typeof window !== 'undefined') {
+    setPersistence(auth, browserLocalPersistence).catch((error) => {
+      console.warn('Failed to set auth persistence:', error);
+    });
+  }
+
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
+    auth,
     firestore: getFirestore(firebaseApp),
     storage: getStorage(firebaseApp),
     messaging: typeof window !== 'undefined' ? getMessaging(firebaseApp) : null
